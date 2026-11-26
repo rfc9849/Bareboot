@@ -295,7 +295,50 @@ fn hardware_z_order(root: &wl_surface::WlSurface, target: &wl_surface::WlSurface
     walk(root, target, &mut rank).unwrap_or(1)
 }
 
+struct CpuBoost {
+    file: File,
+    until: Option<Instant>,
+    attached: bool,
+}
+
+impl CpuBoost {
+    const ATTACHED_MIN: &[u8] = b"30";
+    const DETACHED_MIN: &[u8] = b"0";
+    const INPUT_MIN: &[u8] = b"100";
+    const INPUT_HOLD: std::time::Duration = std::time::Duration::from_millis(250);
+
+    fn write(&self, value: &[u8]) {
+        let _ = self.file.write_at(value, 0);
+    }
+
+    fn baseline(&self) -> &'static [u8] {
+        if self.attached { Self::ATTACHED_MIN } else { Self::DETACHED_MIN }
+    }
+
+    fn set_attached(&mut self, attached: bool) {
+        self.attached = attached;
+        if self.until.is_none() {
+            self.write(self.baseline());
+        }
+    }
+
+    fn input(&mut self) {
+        if self.until.is_none() {
+            self.write(Self::INPUT_MIN);
+        }
+        self.until = Some(Instant::now() + Self::INPUT_HOLD);
+    }
+
+    fn tick(&mut self) {
+        if self.until.is_some_and(|until| Instant::now() >= until) {
+            self.until = None;
+            self.write(self.baseline());
+        }
+    }
+}
+
 struct State {
+    cpu_boost: Option<CpuBoost>,
     direct: Option<direct::Direct>,
     keys: Vec<wl_keyboard::WlKeyboard>,
     pointers: Vec<wl_pointer::WlPointer>,
@@ -1615,6 +1658,15 @@ pub fn run() -> io::Result<()> {
         .and_then(|arg| arg.parse::<i32>().ok())
         .filter(|&fd| fd >= 3)
         .map(|fd| unsafe { OwnedFd::from_raw_fd(fd) });
+    let cpu_boost = args
+        .next()
+        .and_then(|arg| arg.parse::<i32>().ok())
+        .filter(|&fd| fd >= 3)
+        .map(|fd| CpuBoost {
+            file: unsafe { File::from_raw_fd(fd) },
+            until: None,
+            attached: false,
+        });
     let direct = bridge_fd
         .map(|fd| direct::Direct::new(unsafe { OwnedFd::from_raw_fd(fd) }, encoder_fd))
         .transpose()?;
@@ -1638,6 +1690,7 @@ pub fn run() -> io::Result<()> {
     }
     let (keymap, keymap_size) = keymap()?;
     let mut state = State {
+        cpu_boost,
         direct,
         keymap,
         keymap_size,
@@ -1702,6 +1755,9 @@ pub fn run() -> io::Result<()> {
         }
         if fds[4].revents != 0 {
             state.remote_events();
+        }
+        if let Some(boost) = &mut state.cpu_boost {
+            boost.tick();
         }
         if fds[0].revents != 0 {
             let (_, fd) = protocol::recv_frame(control.as_raw_fd())?;

@@ -25,12 +25,14 @@ pub struct Desktop {
     compositor: Option<(Child, UnixStream)>,
     presentation: Option<OwnedFd>,
     encoder: Option<OwnedFd>,
+    cpu_boost: Option<OwnedFd>,
 }
 
 impl Desktop {
     pub fn prepare(
         presentation: Option<&OwnedFd>,
         encoder: Option<&OwnedFd>,
+        cpu_boost: Option<File>,
     ) -> io::Result<Option<Self>> {
         let program = std::env::current_exe()?.with_file_name("bareboot-display");
         if !fs::symlink_metadata(&program)
@@ -49,6 +51,7 @@ impl Desktop {
             compositor: None,
             presentation: None,
             encoder: None,
+            cpu_boost: cpu_boost.map(OwnedFd::from),
         };
         super::linux_impl::set_selinux_label(&endpoint.dir, "u:object_r:bareboot_display_socket:s0")?;
         chown(&endpoint.dir, Some(DISPLAY_UID), Some(GUEST_GROUP))?;
@@ -102,6 +105,10 @@ impl Desktop {
         let encoder_arg = std::ffi::CString::new(
             encoder.as_ref().map_or(-1, AsRawFd::as_raw_fd).to_string()
         ).unwrap();
+        let cpu_boost = self.cpu_boost.as_ref().map(duplicate).transpose()?;
+        let cpu_boost_arg = std::ffi::CString::new(
+            cpu_boost.as_ref().map_or(-1, AsRawFd::as_raw_fd).to_string()
+        ).unwrap();
         let mut command = Command::new(&self.program);
         command
             .env_clear()
@@ -141,6 +148,7 @@ impl Desktop {
                     || libc::fcntl(channel.as_raw_fd(), libc::F_SETFD, 0) != 0
                     || presentation.as_ref().is_some_and(|fd| libc::fcntl(fd.as_raw_fd(), libc::F_SETFD, 0) != 0)
                     || encoder.as_ref().is_some_and(|fd| libc::fcntl(fd.as_raw_fd(), libc::F_SETFD, 0) != 0)
+                    || cpu_boost.as_ref().is_some_and(|fd| libc::fcntl(fd.as_raw_fd(), libc::F_SETFD, 0) != 0)
                 {
                     return Err(io::Error::last_os_error());
                 }
@@ -150,6 +158,7 @@ impl Desktop {
                     channel_arg.as_ptr(),
                     presentation_arg.as_ptr(),
                     encoder_arg.as_ptr(),
+                    cpu_boost_arg.as_ptr(),
                     std::ptr::null(),
                 ];
                 let env = [std::ptr::null::<libc::c_char>()];

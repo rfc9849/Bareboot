@@ -145,3 +145,58 @@ pub(crate) fn sync_guest_min(previous: u32, min: u32) -> io::Result<()> {
     }
     first_error.map_or(Ok(()), Err)
 }
+
+
+const CPUCTL: &str = "/dev/cpuctl";
+const VENDOR_TOP_APP: &str = "/proc/vendor_sched/groups/ta/set_proc_group";
+
+pub struct CpuGroup {
+    dir: std::path::PathBuf,
+}
+
+impl CpuGroup {
+    pub fn create(name: &str) -> io::Result<Option<Self>> {
+        crate::validate::validate_distro_name(name)?;
+        let root = Path::new(CPUCTL);
+        if !root.join("top-app").join("cpu.uclamp.min").exists() {
+            return Ok(None);
+        }
+        let dir = root.join(format!("bareboot-{name}"));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+        let group = Self { dir };
+        group.set_min(0)?;
+        let _ = std::fs::write(group.dir.join("cpu.uclamp.latency_sensitive"), "1");
+        Ok(Some(group))
+    }
+
+    pub fn procs(&self) -> std::path::PathBuf {
+        self.dir.join("cgroup.procs")
+    }
+
+    pub fn set_min(&self, percent: u32) -> io::Result<()> {
+        std::fs::write(self.dir.join("cpu.uclamp.min"), percent.min(100).to_string())
+    }
+
+    pub fn min_file(&self) -> io::Result<std::fs::File> {
+        std::fs::OpenOptions::new().write(true).open(self.dir.join("cpu.uclamp.min"))
+    }
+}
+
+impl Drop for CpuGroup {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir(&self.dir);
+    }
+}
+
+pub fn enter_cpu_group(procs: &Path) -> io::Result<()> {
+    let pid = unsafe { libc::getpid() }.to_string();
+    std::fs::write(procs, &pid)?;
+    if Path::new(VENDOR_TOP_APP).exists() {
+        let _ = std::fs::write(VENDOR_TOP_APP, &pid);
+    }
+    Ok(())
+}

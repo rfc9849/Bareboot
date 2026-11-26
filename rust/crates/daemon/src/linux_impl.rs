@@ -14,7 +14,7 @@ use runtime::image::{
 use runtime::mount::remove_guest_cgroup;
 use runtime::kernel::{kernel_report, probe_kernel};
 use runtime::pty::resize_pty;
-use runtime::scheduler::{foreground_util_min, set_cpu_util_min};
+use runtime::scheduler::{CpuGroup, foreground_util_min, set_cpu_util_min};
 use runtime::validate::{
     parse_allowed_uids, validate_distro_name, validate_image_path, validate_os_label, validate_port_forwards, validate_session_env, validate_ssh_port,
     validate_username,
@@ -42,6 +42,7 @@ struct DistroEntry {
     holder: DistroHolder,
     renderer: Option<Renderer>,
     desktop: Option<Desktop>,
+    _cpu_group: Option<CpuGroup>,
     keep_awake: bool,
 }
 
@@ -419,13 +420,26 @@ impl DaemonState {
                 } else {
                     None
                 };
-                let mut desktop = match Desktop::prepare(renderer.as_ref().map(Renderer::presentation), renderer.as_ref().map(Renderer::encoder)) {
+                let cpu_group = match CpuGroup::create(&name) {
+                    Ok(group) => group,
+                    Err(e) => {
+                        log_event(&format!("CPU group unavailable for {name}: {e}"));
+                        None
+                    }
+                };
+                let cpu_boost = cpu_group.as_ref().and_then(|group| group.min_file().ok());
+                let mut desktop = match Desktop::prepare(
+                    renderer.as_ref().map(Renderer::presentation),
+                    renderer.as_ref().map(Renderer::encoder),
+                    cpu_boost,
+                ) {
                     Ok(desktop) => desktop,
                     Err(e) => {
                         log_event(&format!("display unavailable for {name}: {e}"));
                         None
                     }
                 };
+                let cpu_procs = cpu_group.as_ref().map(CpuGroup::procs);
                 let config = HolderConfig {
                     name: &name,
                     image_path: img,
@@ -441,6 +455,7 @@ impl DaemonState {
                     relaxed_sync: self.options().relaxed_sync,
                     gpu_mounts: renderer.as_ref().map(Renderer::mounts),
                     desktop_dir: desktop.as_ref().map(|d| d.dir.as_path()),
+                    cpu_group: cpu_procs.as_deref(),
                 };
                 match DistroHolder::start(&config) {
                     Ok(holder) => {
@@ -463,6 +478,7 @@ impl DaemonState {
                                 holder,
                                 renderer,
                                 desktop,
+                                _cpu_group: cpu_group,
                                 keep_awake: settings.keep_awake,
                             },
                         );
@@ -980,6 +996,7 @@ fn init_pacman_keyring(name: &str, image_path: &Path, ctx: &JobContext) -> io::R
         relaxed_sync: false,
         gpu_mounts: None,
         desktop_dir: None,
+        cpu_group: None,
     })?;
     let result = holder
         .spawn_session(&SpawnSpec {

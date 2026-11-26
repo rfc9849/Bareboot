@@ -580,6 +580,9 @@ impl State {
         self.keyboard_focus(None);
         if let Ok(remote) = Remote::new(socket) {
             self.remote = Some(remote);
+            if let Some(boost) = &mut self.cpu_boost {
+                boost.set_attached(true);
+            }
         }
     }
 
@@ -590,6 +593,9 @@ impl State {
         self.keyboard_focus(None);
         self.pointer_leave();
         self.remote = None;
+        if let Some(boost) = &mut self.cpu_boost {
+            boost.set_attached(false);
+        }
         if let Some(direct) = &mut self.direct {
             direct.reset_encoder();
         }
@@ -1062,6 +1068,13 @@ impl State {
         for event in events {
             if self.remote.is_none() {
                 return;
+            }
+            if matches!(
+                event,
+                Event::Motion { .. } | Event::Button { .. } | Event::Axis { .. } | Event::Key { .. }
+            ) && let Some(boost) = &mut self.cpu_boost
+            {
+                boost.input();
             }
             match event {
                 Event::Hello { scale, width, height } => self.remote_hello(scale, width, height),

@@ -97,6 +97,7 @@ pub struct HolderConfig<'a> {
     pub relaxed_sync: bool,
     pub gpu_mounts: Option<mount::GpuMounts<'a>>,
     pub desktop_dir: Option<&'a Path>,
+    pub cpu_group: Option<&'a Path>,
 }
 
 pub struct SpawnSpec {
@@ -475,6 +476,11 @@ fn send_holder_err(sock_fd: libc::c_int, err: &str) {
 
 fn run_holder_process(sock: UnixStream, config: &HolderConfig<'_>) -> ! {
     unsafe { libc::umask(0o022) };
+    if let Some(procs) = config.cpu_group
+        && let Err(e) = scheduler::enter_cpu_group(procs)
+    {
+        eprintln!("Could not move {} into its CPU group: {e}", config.name);
+    }
     let use_pid_ns = config.kernel.has_pid_ns;
     let mut uplink = None;
     let setup = (|| -> io::Result<(File, bool, bool)> {
