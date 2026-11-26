@@ -267,3 +267,12 @@ allow mediaserver bareboot_media fd use
 allow bareboot_media mediametrics_service service_manager find
 allow bareboot_media mediametrics binder { call transfer }
 allow mediametrics bareboot_media binder transfer
+# Qualcomm: libhidl looks up the HIDL service manager for the codec/mapper and aborts when denied.
+allow bareboot_media hidl_manager_hwservice hwservice_manager find
+allow bareboot_gpu_renderer hidl_manager_hwservice hwservice_manager find
+allow bareboot_media self process getcap
+# Early-boot labels can stay unmapped; the daemon relabels the bundle before use.
+allow bareboot_daemon { unlabeled system_file } file { getattr relabelfrom }
+allow bareboot_daemon { unlabeled system_file } dir { getattr search read open relabelfrom }
+allow bareboot_daemon { bareboot_gpu_exec bareboot_display_exec bareboot_gpu_guest } file { getattr relabelto }
+allow bareboot_daemon bareboot_gpu_guest dir { getattr search read open relabelto }

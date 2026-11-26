@@ -1085,6 +1085,27 @@ fn enter_module_domain() -> io::Result<()> {
 
 const SOCKET_SELINUX_CONTEXT: &str = "u:object_r:bareboot_socket:s0";
 
+/// Sets the label only when it differs, so files that already carry it need no relabel permission.
+pub(super) fn ensure_selinux_label(path: &Path, label: &str) -> io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains NUL"))?;
+    let mut current = [0u8; 256];
+    let len = unsafe {
+        libc::lgetxattr(
+            c_path.as_ptr(),
+            c"security.selinux".as_ptr(),
+            current.as_mut_ptr().cast(),
+            current.len(),
+        )
+    };
+    if len > 0 && current[..len as usize].strip_suffix(b"\0").unwrap_or(&current[..len as usize]) == label.as_bytes() {
+        return Ok(());
+    }
+    set_selinux_label(path, label)
+}
+
 pub(super) fn set_selinux_label(path: &Path, label: &str) -> io::Result<()> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;

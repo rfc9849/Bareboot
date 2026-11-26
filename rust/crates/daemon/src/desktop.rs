@@ -38,6 +38,8 @@ impl Desktop {
         {
             return Ok(None);
         }
+        // Same early-boot label problem as the GPU bundle (see gpu::relabel_bundle).
+        super::linux_impl::ensure_selinux_label(&program, "u:object_r:bareboot_display_exec:s0")?;
         let mut template = *b"/dev/socket/bareboot-display-XXXXXX\0";
         if unsafe { libc::mkdtemp(template.as_mut_ptr().cast()) }.is_null() {
             return Err(io::Error::last_os_error());

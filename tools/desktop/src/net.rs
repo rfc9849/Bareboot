@@ -113,15 +113,15 @@ pub struct Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        let _ = Command::new("adb").args(["-d", "forward", "--remove", &format!("tcp:{}", self.port)]).status();
+        let _ = adb().args(["forward", "--remove", &format!("tcp:{}", self.port)]).status();
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }
 
 pub fn connect(distro: &str) -> io::Result<Connection> {
-    let mut child = Command::new("adb")
-        .args(["-d", "shell", "-T", "su", "-c"])
+    let mut child = adb()
+        .args(["shell", "-T", "su", "-c"])
         .arg(format!("'/data/adb/modules/bareboot/bin/bareboot display {distro}'"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -132,7 +132,7 @@ pub fn connect(distro: &str) -> io::Result<Connection> {
         let _ = child.kill();
         return Err(io::Error::other(format!("unexpected reply from the phone: {}", line.trim())));
     };
-    let out = Command::new("adb").args(["-d", "forward", "tcp:0", &format!("tcp:{remote}")]).output()?;
+    let out = adb().args(["forward", "tcp:0", &format!("tcp:{remote}")]).output()?;
     let port = String::from_utf8_lossy(&out.stdout).trim().parse::<u16>().ok().filter(|_| out.status.success());
     let Some(port) = port else {
         let _ = child.kill();
@@ -141,7 +141,7 @@ pub fn connect(distro: &str) -> io::Result<Connection> {
     let stream = match TcpStream::connect(("127.0.0.1", port)) {
         Ok(stream) => stream,
         Err(e) => {
-            let _ = Command::new("adb").args(["-d", "forward", "--remove", &format!("tcp:{port}")]).status();
+            let _ = adb().args(["forward", "--remove", &format!("tcp:{port}")]).status();
             let _ = child.kill();
             return Err(e);
         }
@@ -297,4 +297,14 @@ pub fn receive(stream: TcpStream, sender: Sender, mut emit: impl FnMut(Event)) {
         Ok(()) => String::new(),
     };
     emit(Event::Disconnected(reason));
+}
+
+/// adb for the test phone: `ANDROID_SERIAL` picks one when several devices are attached, else the only USB one.
+fn adb() -> Command {
+    let mut command = Command::new("adb");
+    match std::env::var("ANDROID_SERIAL") {
+        Ok(serial) if !serial.is_empty() => command.args(["-s", &serial]),
+        _ => command.arg("-d"),
+    };
+    command
 }

@@ -68,6 +68,26 @@ pub fn memory_available() -> bool {
         .any(|heap| fs::metadata(heap).is_ok_and(|meta| meta.file_type().is_char_device()))
 }
 
+/// The module's file labels are read at early boot, before the root manager loads the
+/// Bareboot policy, so the kernel can leave them unmapped (unlabeled) until relabelled.
+/// Set them right before use instead of relying on service.sh.
+fn relabel_bundle(bundle: &Path) -> io::Result<()> {
+    for file in ["kumquat", "libgfxstream_backend.so", "bareboot-media"] {
+        super::linux_impl::ensure_selinux_label(&bundle.join("host").join(file), "u:object_r:bareboot_gpu_exec:s0")?;
+    }
+    relabel_tree(&bundle.join("guest"), "u:object_r:bareboot_gpu_guest:s0")
+}
+
+fn relabel_tree(path: &Path, label: &str) -> io::Result<()> {
+    super::linux_impl::ensure_selinux_label(path, label)?;
+    if fs::symlink_metadata(path)?.is_dir() {
+        for entry in fs::read_dir(path)? {
+            relabel_tree(&entry?.path(), label)?;
+        }
+    }
+    Ok(())
+}
+
 fn prepare_host_mount() -> io::Result<()> {
     for path in ["/data/local/bareboot", HOST_MOUNT] {
         match fs::create_dir(path) {
@@ -96,6 +116,7 @@ impl Renderer {
             ));
         }
         prepare_host_mount()?;
+        relabel_bundle(bundle)?;
         let host = CString::new(bundle.join("host").as_os_str().as_bytes())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         let host_mount = CString::new(HOST_MOUNT).unwrap();
