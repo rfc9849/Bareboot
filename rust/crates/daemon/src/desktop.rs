@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, Permissions},
-    io,
+    io::{self, Read},
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
         unix::{
@@ -60,8 +60,18 @@ impl Desktop {
 
     pub fn attach(&mut self) -> io::Result<OwnedFd> {
         if let Some((child, _)) = &mut self.compositor
-            && child.try_wait()?.is_some()
+            && let Some(status) = child.try_wait()?
         {
+            let mut bytes = [0u8; 4096];
+            let size = child
+                .stderr
+                .as_mut()
+                .and_then(|stderr| stderr.read(&mut bytes).ok())
+                .unwrap_or(0);
+            eprintln!(
+                "display server exited: {status}: {}",
+                String::from_utf8_lossy(&bytes[..size]).trim()
+            );
             self.compositor = None;
         }
         if self.compositor.is_none() {
@@ -98,7 +108,7 @@ impl Desktop {
             .current_dir(&self.dir)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(Stdio::piped());
         let boost = runtime::scheduler::foreground_util_min();
         unsafe {
             command.pre_exec(move || {

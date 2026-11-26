@@ -445,6 +445,7 @@ allow bareboot_daemon bareboot_display_exec file { getattr open read execute map
 allow bareboot_display bareboot_display_exec file { entrypoint getattr open read execute map }
 allow bareboot_display bareboot_daemon process sigchld
 allow bareboot_display bareboot_daemon fd use
+allow bareboot_display bareboot_daemon fifo_file { getattr write }
 allow bareboot_display bareboot_daemon unix_stream_socket { read write getattr getopt setopt shutdown }
 allow untrusted_app_all bareboot_daemon unix_stream_socket shutdown
 
