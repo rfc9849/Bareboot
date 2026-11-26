@@ -28,12 +28,12 @@ while IFS=: read -r _ controllers group; do
     printf '%s\n' "$$" >"${cgroup_root:?}/cgroup.procs"
 done <"/proc/$$/cgroup"
 if [ -f "$MODDIR/bin/bareboot-display" ] &&
-   ! chcon u:object_r:bareboot_display_exec:s0 "$MODDIR/bin/bareboot-display"; then
+   ! /system/bin/chcon u:object_r:bareboot_display_exec:s0 "$MODDIR/bin/bareboot-display"; then
     printf '%s\n' 'Could not label the Bareboot display server.' >>"$LOG"
 fi
 if [ -f "$MODDIR/gpu/host/kumquat" ]; then
-    if ! chcon u:object_r:bareboot_gpu_exec:s0 "$MODDIR/gpu/host/kumquat"          "$MODDIR/gpu/host/libgfxstream_backend.so"          "$MODDIR/gpu/host/bareboot-media" ||
-       ! chcon -R u:object_r:bareboot_gpu_guest:s0 "$MODDIR/gpu/guest"; then
+    if ! /system/bin/chcon u:object_r:bareboot_gpu_exec:s0 "$MODDIR/gpu/host/kumquat"          "$MODDIR/gpu/host/libgfxstream_backend.so"          "$MODDIR/gpu/host/bareboot-media" ||
+       ! /system/bin/chcon -R u:object_r:bareboot_gpu_guest:s0 "$MODDIR/gpu/guest"; then
         printf '%s\n' 'Could not label the Bareboot GPU bundle.' >>"$LOG"
     fi
 fi
