@@ -1,9 +1,10 @@
-use ffmpeg_next as ffmpeg;
 use ffmpeg::ffi;
+use ffmpeg_next as ffmpeg;
 use std::{
     collections::HashMap,
     io::{self, BufRead, BufReader, Read, Write},
     net::TcpStream,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
 };
@@ -71,8 +72,9 @@ impl Frame {
     #[cfg(target_os = "macos")]
     pub fn pixel_buffer(&self) -> Option<*const std::ffi::c_void> {
         unsafe {
-            ((*self.0).format == ffi::AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX as i32 && !(*self.0).data[3].is_null())
-                .then(|| (*self.0).data[3] as *const std::ffi::c_void)
+            ((*self.0).format == ffi::AVPixelFormat::AV_PIX_FMT_VIDEOTOOLBOX as i32
+                && !(*self.0).data[3].is_null())
+            .then(|| (*self.0).data[3] as *const std::ffi::c_void)
         }
     }
 }
@@ -84,8 +86,20 @@ pub enum Event {
     Size(u32, u32, u32),
     Move(u32),
     Resize(u32, u32),
-    Video { id: u32, frame: Frame, crop: (u32, u32), matrix: [f32; 6] },
-    Pixels { id: u32, width: u32, height: u32, y0: u32, rows: u32, data: Vec<u8> },
+    Video {
+        id: u32,
+        frame: Frame,
+        crop: (u32, u32),
+        matrix: [f32; 6],
+    },
+    Pixels {
+        id: u32,
+        width: u32,
+        height: u32,
+        y0: u32,
+        rows: u32,
+        data: Vec<u8>,
+    },
     Disconnected(String),
 }
 
@@ -104,54 +118,97 @@ impl Sender {
     }
 }
 
-fn adb() -> Command {
-    let mut command = Command::new("adb");
-    match std::env::var_os("ANDROID_SERIAL").filter(|serial| !serial.is_empty()) {
-        Some(serial) => command.arg("-s").arg(serial),
-        None => command.arg("-d"),
-    };
+fn adb_command(adb_path: &Path, serial: Option<&str>) -> Command {
+    let mut command = Command::new(adb_path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let resolved = serial
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .or_else(|| std::env::var("ANDROID_SERIAL").ok().filter(|s| !s.is_empty()));
+    match resolved {
+        Some(serial) => {
+            command.arg("-s").arg(serial);
+        }
+        None => {
+            command.arg("-d");
+        }
+    }
     command
 }
 
 pub struct Connection {
     pub sender: Sender,
     pub reader: TcpStream,
+    adb_path: PathBuf,
+    serial: Option<String>,
     child: Child,
-    port: u16,
+    pub port: u16,
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        let _ = adb().args(["forward", "--remove", &format!("tcp:{}", self.port)]).status();
+        let _ = adb_command(&self.adb_path, self.serial.as_deref())
+            .args(["forward", "--remove", &format!("tcp:{}", self.port)])
+            .status();
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }
 
-pub fn connect(distro: &str) -> io::Result<Connection> {
-    let mut child = adb()
+pub fn connect(adb_path: &Path, serial: Option<&str>, distro: &str) -> io::Result<Connection> {
+    let mut child = adb_command(adb_path, serial)
         .args(["shell", "-T", "su", "-c"])
         .arg(format!("'/data/adb/modules/bareboot/bin/bareboot display {distro}'"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()?;
     let mut line = String::new();
     BufReader::new(child.stdout.take().unwrap()).read_line(&mut line)?;
     let Some(remote) = line.trim().strip_prefix("PORT=").and_then(|p| p.parse::<u16>().ok()) else {
+        let mut stderr = String::new();
+        if let Some(mut err) = child.stderr.take() {
+            let _ = err.read_to_string(&mut stderr);
+        }
         let _ = child.kill();
-        return Err(io::Error::other(format!("unexpected reply from the phone: {}", line.trim())));
+        let _ = child.wait();
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_owned()
+        } else if !line.trim().is_empty() {
+            line.trim().to_owned()
+        } else {
+            "empty response from phone".to_owned()
+        };
+        return Err(io::Error::other(detail));
     };
-    let out = adb().args(["forward", "tcp:0", &format!("tcp:{remote}")]).output()?;
-    let port = String::from_utf8_lossy(&out.stdout).trim().parse::<u16>().ok().filter(|_| out.status.success());
+    let out = adb_command(adb_path, serial)
+        .args(["forward", "tcp:0", &format!("tcp:{remote}")])
+        .output()?;
+    let port = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|_| out.status.success());
     let Some(port) = port else {
         let _ = child.kill();
-        return Err(io::Error::other(format!("adb forward failed: {}", String::from_utf8_lossy(&out.stderr).trim())));
+        let _ = child.wait();
+        return Err(io::Error::other(format!(
+            "adb forward failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
     };
     let stream = match TcpStream::connect(("127.0.0.1", port)) {
         Ok(stream) => stream,
         Err(e) => {
-            let _ = adb().args(["forward", "--remove", &format!("tcp:{port}")]).status();
+            let _ = adb_command(adb_path, serial)
+                .args(["forward", "--remove", &format!("tcp:{port}")])
+                .status();
             let _ = child.kill();
+            let _ = child.wait();
             return Err(e);
         }
     };
@@ -159,6 +216,8 @@ pub fn connect(distro: &str) -> io::Result<Connection> {
     Ok(Connection {
         sender: Sender(Arc::new(Mutex::new(stream.try_clone()?))),
         reader: stream,
+        adb_path: adb_path.to_path_buf(),
+        serial: serial.map(str::to_owned),
         child,
         port,
     })
@@ -182,13 +241,19 @@ fn hw_device() -> Option<*mut ffi::AVBufferRef> {
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let kind = ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI;
     let mut device = std::ptr::null_mut();
-    let ret = unsafe { ffi::av_hwdevice_ctx_create(&mut device, kind, std::ptr::null(), std::ptr::null_mut(), 0) };
+    let ret = unsafe {
+        ffi::av_hwdevice_ctx_create(&mut device, kind, std::ptr::null(), std::ptr::null_mut(), 0)
+    };
     (ret >= 0 && !device.is_null()).then_some(device)
 }
 
 impl Decoder {
     fn new(device: Option<*mut ffi::AVBufferRef>, hevc: bool) -> Option<Self> {
-        let codec = ffmpeg::decoder::find(if hevc { ffmpeg::codec::Id::HEVC } else { ffmpeg::codec::Id::H264 })?;
+        let codec = ffmpeg::decoder::find(if hevc {
+            ffmpeg::codec::Id::HEVC
+        } else {
+            ffmpeg::codec::Id::H264
+        })?;
         let mut context = ffmpeg::codec::Context::new_with_codec(codec);
         unsafe {
             let raw = context.as_mut_ptr();
@@ -199,7 +264,11 @@ impl Decoder {
             }
         }
         let decoder = context.decoder().video().ok()?;
-        Some(Self { decoder, failed: false, hevc })
+        Some(Self {
+            decoder,
+            failed: false,
+            hevc,
+        })
     }
 
     fn decode(&mut self, data: &[u8], mut out: impl FnMut(Frame, [f32; 6])) -> bool {
@@ -245,7 +314,8 @@ fn matrix(frame: &ffmpeg::frame::Video) -> [f32; 6] {
 }
 
 fn word(body: &[u8], index: usize) -> u32 {
-    body.get(index * 4..index * 4 + 4).map_or(0, |b| u32::from_le_bytes(b.try_into().unwrap()))
+    body.get(index * 4..index * 4 + 4)
+        .map_or(0, |b| u32::from_le_bytes(b.try_into().unwrap()))
 }
 
 pub fn receive(stream: TcpStream, sender: Sender, mut emit: impl FnMut(Event)) {
@@ -273,7 +343,10 @@ pub fn receive(stream: TcpStream, sender: Sender, mut emit: impl FnMut(Event)) {
                 decoders.remove(&id);
                 emit(Event::Close(id));
             }
-            TITLE => emit(Event::Title(id, String::from_utf8_lossy(&body[4.min(len)..]).into_owned())),
+            TITLE => emit(Event::Title(
+                id,
+                String::from_utf8_lossy(&body[4.min(len)..]).into_owned(),
+            )),
             SIZE => emit(Event::Size(id, word(&body, 1), word(&body, 2))),
             MOVE => emit(Event::Move(id)),
             RESIZE => emit(Event::Resize(id, word(&body, 1))),
@@ -290,27 +363,50 @@ pub fn receive(stream: TcpStream, sender: Sender, mut emit: impl FnMut(Event)) {
                         None => return Err(io::Error::other("video decoder is unavailable")),
                     },
                 };
-                let ok = decoder.decode(&body[16..], |frame, matrix| emit(Event::Video { id, frame, crop, matrix }));
+                let ok = decoder.decode(&body[16..], |frame, matrix| {
+                    emit(Event::Video {
+                        id,
+                        frame,
+                        crop,
+                        matrix,
+                    })
+                });
                 if !ok && !decoder.failed {
                     sender.send(KEYFRAME, &[id]);
                 }
                 decoder.failed = !ok;
             }
             PIXELS if len >= 20 => {
-                let (width, height, y0, rows) = (word(&body, 1), word(&body, 2), word(&body, 3), word(&body, 4));
+                let (width, height, y0, rows) = (
+                    word(&body, 1),
+                    word(&body, 2),
+                    word(&body, 3),
+                    word(&body, 4),
+                );
                 if width == 0 || width > 16384 || y0 + rows > height {
                     continue;
                 }
-                let Ok(data) = lz4_flex::block::decompress_size_prepended(&body[20..]) else { continue };
+                let Ok(data) = lz4_flex::block::decompress_size_prepended(&body[20..]) else {
+                    continue;
+                };
                 if data.len() == width as usize * rows as usize * 4 {
-                    emit(Event::Pixels { id, width, height, y0, rows, data });
+                    emit(Event::Pixels {
+                        id,
+                        width,
+                        height,
+                        y0,
+                        rows,
+                        data,
+                    });
                 }
             }
             _ => {}
         }
     })();
     let reason = match result {
-        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => "the phone closed the connection".to_string(),
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
+            "the phone closed the connection".to_string()
+        }
         Err(e) => e.to_string(),
         Ok(()) => String::new(),
     };

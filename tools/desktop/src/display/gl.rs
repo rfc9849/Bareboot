@@ -1,4 +1,4 @@
-use crate::net::Frame;
+use super::net::Frame;
 use ffmpeg_next::ffi;
 use glow::HasContext;
 use glutin::{

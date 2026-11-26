@@ -1,7 +1,14 @@
 use winit::keyboard::KeyCode;
 
-pub fn evdev(code: KeyCode) -> Option<u32> {
+pub fn evdev(code: KeyCode, cmd_to_ctrl: bool) -> Option<u32> {
     use KeyCode::*;
+    if cmd_to_ctrl {
+        match code {
+            SuperLeft => return Some(29),
+            SuperRight => return Some(97),
+            _ => {}
+        }
+    }
     Some(match code {
         Escape => 1,
         Digit1 => 2,

@@ -1,4 +1,4 @@
-use crate::net::Frame;
+use super::net::Frame;
 use objc2::{rc::Retained, runtime::AnyObject};
 use objc2_app_kit::NSView;
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
