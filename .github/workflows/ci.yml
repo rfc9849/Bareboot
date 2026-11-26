@@ -99,7 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             pkg-config libclang-dev             libavcodec-dev libavutil-dev libavformat-dev libavfilter-dev libavdevice-dev libswscale-dev libswresample-dev libpostproc-dev             libwayland-dev libxkbcommon-dev libx11-dev libxcb1-dev libxcb-render0-dev             libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev libfreetype-dev             libvulkan-dev libgl-dev libegl-dev
+          sudo apt-get install -y --no-install-recommends             pkg-config libclang-dev             libavcodec-dev libavutil-dev libavformat-dev libavfilter-dev libavdevice-dev libswscale-dev libswresample-dev libpostproc-dev             libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libx11-dev libxcb1-dev libxcb-render0-dev             libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev libfreetype-dev             libvulkan-dev libgl-dev libegl-dev
 
       - name: Install FFmpeg (Windows)
         if: runner.os == 'Windows'
