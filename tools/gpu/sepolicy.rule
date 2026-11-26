@@ -107,6 +107,7 @@ allow bareboot_gpu_renderer hal_graphics_mapper_service service_manager find
 type_transition bareboot_gpu_renderer tmpfs file bareboot_gpu_mem
 allow bareboot_gpu_renderer bareboot_gpu_mem file { create getattr open read write map setattr lock ioctl }
 allow bareboot_guest bareboot_gpu_mem file { getattr read write map ioctl }
+allowxperm bareboot_guest bareboot_gpu_mem file ioctl { 0x6200-0x62ff }
 
 allow bareboot_gpu_renderer bareboot_daemon unix_stream_socket { read write getattr }
 allow bareboot_display bareboot_gpu_renderer fd use

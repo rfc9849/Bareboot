@@ -12,7 +12,7 @@ index e81a6c4..b5f5c5e 100644
  [build-dependencies]
  pkg-config = "0.3"
 diff --git a/kumquat/server/src/kumquat_gpu/mod.rs b/kumquat/server/src/kumquat_gpu/mod.rs
-index ffa104c..4feeb0e 100644
+index ffa104c..284b96d 100644
 --- a/kumquat/server/src/kumquat_gpu/mod.rs
 +++ b/kumquat/server/src/kumquat_gpu/mod.rs
 @@ -9,6 +9,7 @@ use std::path::Path;
@@ -76,15 +76,16 @@ index ffa104c..4feeb0e 100644
                      ctx.resources.insert(resource_id, resource);
  
                      kumquat_gpu
-@@ -596,6 +612,16 @@ impl KumquatGpuConnection {
+@@ -596,6 +612,17 @@ impl KumquatGpuConnection {
                          .lock()
                          .unwrap()
                          .export_blob(resource_id)?;
 +                    #[cfg(target_os = "android")]
 +                    let (handle, registration) = match handle {
 +                        rutabaga_gfx::RutabagaHandle::AhbInfo(info) => {
-+                            let (handle, registration) = crate::bareboot_ahb::register(info)
-+                                .map_err(MagmaGpuError::IoError)?;
++                            let (handle, registration) =
++                                crate::bareboot_ahb::register(info, Some((resource_id, cmd.size)))
++                                    .map_err(MagmaGpuError::IoError)?;
 +                            (handle, Some(registration))
 +                        }
 +                        handle => (MagmaGpuHandle::try_from(handle)?, None),
@@ -93,7 +94,7 @@ index ffa104c..4feeb0e 100644
                      let handle = MagmaGpuHandle::try_from(handle)?;
                      let mut vk_info: RutabagaVulkanInfo = Default::default();
                      if let Ok(vulkan_info) = kumquat_gpu
-@@ -611,7 +637,12 @@ impl KumquatGpuConnection {
+@@ -611,7 +638,12 @@ impl KumquatGpuConnection {
                          resource_id,
                          rutabaga: kumquat_gpu.rutabaga.clone(),
                          mapping: None,
@@ -107,7 +108,7 @@ index ffa104c..4feeb0e 100644
  
                      let resp = kumquat_gpu_protocol_resp_resource_create {
 diff --git a/kumquat/server/src/main.rs b/kumquat/server/src/main.rs
-index bbbf36d..b5960a5 100644
+index bbbf36d..7b914b0 100644
 --- a/kumquat/server/src/main.rs
 +++ b/kumquat/server/src/main.rs
 @@ -4,6 +4,8 @@

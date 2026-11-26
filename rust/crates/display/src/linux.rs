@@ -1634,6 +1634,7 @@ pub fn run() -> io::Result<()> {
     handle.create_global::<State, wayland_protocols::wp::viewporter::server::wp_viewporter::WpViewporter, _>(1, ());
     if direct.is_some() {
         handle.create_global::<State, direct::bareboot_ahb_v1::BarebootAhbV1, _>(1, ());
+        handle.create_global::<State, wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, _>(3, ());
     }
     let (keymap, keymap_size) = keymap()?;
     let mut state = State {

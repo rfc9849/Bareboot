@@ -97,6 +97,10 @@ musl)
 esac
 install -m 0755 /tools/run /out/bin/bareboot-gpu
 cc -O2 -Wl,-z,max-page-size=16384 -Wall -Wextra -Wno-missing-field-initializers /tools/compute.c -lvulkan -o "$dest/bin/check"
+mkdir -p "$dest/lib/gbm"
+cc -shared -fPIC -O2 -Wall -Wextra -Werror -fvisibility=hidden -Wl,-z,max-page-size=16384 \
+    -I/build/mesa/src/gbm/main /tools/gbm_backend.c -lvulkan -o "$dest/lib/gbm/bareboot_gbm.so"
+strip --strip-unneeded "$dest/lib/gbm/bareboot_gbm.so"
 glslangValidator -V /tools/compute.comp -o "$dest/share/bareboot-gpu/compute.spv"
 strip --strip-unneeded "$dest/lib/libvulkan_gfxstream.so" "$dest/bin/check"
 cp /build/mesa/docs/license.rst /out/licenses/mesa

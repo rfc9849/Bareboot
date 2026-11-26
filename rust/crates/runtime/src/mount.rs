@@ -279,6 +279,9 @@ pub fn mount_ext4_and_pivot(
             }
         }
     });
+    if gpu_mounted && let Err(e) = add_render_node(&dev_dir) {
+        eprintln!("could not add a render node for {hostname}: {e}");
+    }
     let desktop_mounted = desktop_dir.is_some_and(|path| match mount_desktop(&run_dir, path) {
         Ok(()) => true,
         Err(e) => {
@@ -442,6 +445,27 @@ fn ensure_etc_hosts(rootfs: &Path, hostname: &str) {
     }
     updated.push_str(&format!("127.0.0.1 {hostname}\n"));
     let _ = fs::write(&hosts_path, updated);
+}
+
+fn add_render_node(dev_dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let mut nodes: Vec<_> = fs::read_dir("/dev/dri")?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("renderD"))
+        .filter_map(|entry| fs::metadata(entry.path()).ok().map(|meta| (entry.file_name(), meta)))
+        .filter(|(_, meta)| meta.file_type().is_char_device())
+        .collect();
+    nodes.sort_by(|a, b| a.0.cmp(&b.0));
+    let Some((name, meta)) = nodes.into_iter().next() else {
+        return Ok(());
+    };
+    let dri = dev_dir.join("dri");
+    fs::create_dir_all(&dri)?;
+    let old_mask = unsafe { libc::umask(0) };
+    let rdev = meta.rdev();
+    let res = mknod_chr(&dri.join(name), 0o666, libc::major(rdev), libc::minor(rdev));
+    unsafe { libc::umask(old_mask) };
+    res
 }
 
 fn setup_dev(dev_dir: &Path) -> io::Result<()> {

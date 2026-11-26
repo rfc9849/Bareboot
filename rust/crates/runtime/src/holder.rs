@@ -1122,6 +1122,10 @@ fn exec_guest_session(
             "VK_DRIVER_FILES={bundle}/share/vulkan/icd.d/gfxstream_vk_icd.aarch64.json"
         ));
         env_list.push("MESA_LOADER_DRIVER_OVERRIDE=zink".to_string());
+        if std::path::Path::new(&format!("{bundle}/lib/gbm/bareboot_gbm.so")).exists() {
+            env_list.push("GBM_BACKEND=bareboot".to_string());
+            env_list.push(format!("GBM_BACKENDS_PATH={bundle}/lib/gbm"));
+        }
         env_list.push("MOZ_DRM_DEVICE=/dev/null".to_string());
         env_list.push("MOZ_DISABLE_RDD_SANDBOX=1".to_string());
         if !is_musl {

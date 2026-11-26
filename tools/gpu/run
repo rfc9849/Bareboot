@@ -10,6 +10,9 @@ set_vulkan_env() {
     export VIRTGPU_KUMQUAT=1 VIRTGPU_KUMQUAT_SOCKET_PATH="$root/socket/kumquat-gpu-0"
     export VK_DRIVER_FILES="$bundle/share/vulkan/icd.d/gfxstream_vk_icd.aarch64.json"
     export MESA_LOADER_DRIVER_OVERRIDE=zink
+    if [ -f "$bundle/lib/gbm/bareboot_gbm.so" ]; then
+        export GBM_BACKEND=bareboot GBM_BACKENDS_PATH="$bundle/lib/gbm"
+    fi
     export MOZ_DRM_DEVICE=/dev/null
     export MOZ_DISABLE_RDD_SANDBOX=1
     if [ -d "$bundle/lib/hwdec" ]; then

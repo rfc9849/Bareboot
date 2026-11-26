@@ -8,6 +8,9 @@ use std::{
         unix::fs::MetadataExt,
     },
 };
+use wayland_protocols::wp::linux_dmabuf::zv1::server::{
+    zwp_linux_buffer_params_v1, zwp_linux_dmabuf_v1,
+};
 use wayland_server::{
     Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource, protocol::wl_buffer,
 };
@@ -438,5 +441,120 @@ impl Dispatch<wl_buffer::WlBuffer, Buffer> for State {
         _: &DisplayHandle,
         _: &mut DataInit<'_, Self>,
     ) {
+    }
+}
+
+const DMABUF_FORMATS: [u32; 4] = [
+    u32::from_le_bytes(*b"AR24"),
+    u32::from_le_bytes(*b"XR24"),
+    u32::from_le_bytes(*b"AB24"),
+    u32::from_le_bytes(*b"XB24"),
+];
+const MOD_LINEAR: u64 = 0;
+const MOD_INVALID: u64 = 0x00ff_ffff_ffff_ffff;
+
+#[derive(Default)]
+pub(super) struct DmabufParams {
+    plane: std::sync::Mutex<Option<(OwnedFd, u64)>>,
+}
+
+impl DmabufParams {
+    fn take(&self, format: u32) -> Option<OwnedFd> {
+        let (fd, modifier) = self.plane.lock().unwrap().take()?;
+        (DMABUF_FORMATS.contains(&format) && (modifier == MOD_LINEAR || modifier == MOD_INVALID))
+            .then_some(fd)
+    }
+}
+
+fn dmabuf_buffer(state: &State, fd: OwnedFd, width: i32, height: i32) -> Option<Buffer> {
+    let direct = state.direct.as_ref()?;
+    if !(1..=MAX_EDGE).contains(&width) || !(1..=MAX_EDGE).contains(&height) {
+        return None;
+    }
+    direct.get(fd, width, height).ok()
+}
+
+impl GlobalDispatch<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, ()> for State {
+    fn bind(
+        _: &mut Self,
+        _: &DisplayHandle,
+        _: &Client,
+        resource: New<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1>,
+        _: &(),
+        init: &mut DataInit<'_, Self>,
+    ) {
+        let dmabuf = init.init(resource, ());
+        for format in DMABUF_FORMATS {
+            if dmabuf.version() >= 3 {
+                dmabuf.modifier(format, (MOD_LINEAR >> 32) as u32, MOD_LINEAR as u32);
+            } else {
+                dmabuf.format(format);
+            }
+        }
+    }
+}
+
+impl Dispatch<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, ()> for State {
+    fn request(
+        _: &mut Self,
+        _: &Client,
+        _: &zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1,
+        request: zwp_linux_dmabuf_v1::Request,
+        _: &(),
+        _: &DisplayHandle,
+        init: &mut DataInit<'_, Self>,
+    ) {
+        if let zwp_linux_dmabuf_v1::Request::CreateParams { params_id } = request {
+            init.init(params_id, DmabufParams::default());
+        }
+    }
+}
+
+impl Dispatch<zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1, DmabufParams> for State {
+    fn request(
+        state: &mut Self,
+        client: &Client,
+        resource: &zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1,
+        request: zwp_linux_buffer_params_v1::Request,
+        params: &DmabufParams,
+        dh: &DisplayHandle,
+        init: &mut DataInit<'_, Self>,
+    ) {
+        use zwp_linux_buffer_params_v1::{Error, Request};
+        match request {
+            Request::Add { fd, plane_idx, offset, modifier_hi, modifier_lo, .. } => {
+                let mut plane = params.plane.lock().unwrap();
+                if plane_idx != 0 || offset != 0 || plane.is_some() {
+                    resource.post_error(Error::PlaneIdx, "only one plane at offset 0 is supported");
+                    return;
+                }
+                *plane = Some((fd, (u64::from(modifier_hi) << 32) | u64::from(modifier_lo)));
+            }
+            Request::Create { width, height, format, .. } => {
+                let buffer = params
+                    .take(format)
+                    .and_then(|fd| dmabuf_buffer(state, fd, width, height))
+                    .and_then(|buffer| {
+                        client
+                            .create_resource::<wl_buffer::WlBuffer, Buffer, State>(dh, 1, buffer)
+                            .ok()
+                    });
+                match buffer {
+                    Some(buffer) => resource.created(&buffer),
+                    None => resource.failed(),
+                }
+            }
+            Request::CreateImmed { buffer_id, width, height, format, .. } => {
+                match params.take(format).and_then(|fd| dmabuf_buffer(state, fd, width, height)) {
+                    Some(buffer) => {
+                        init.init(buffer_id, buffer);
+                    }
+                    None => {
+                        init.post_error(buffer_id, Error::InvalidWlBuffer, "unsupported dmabuf");
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }

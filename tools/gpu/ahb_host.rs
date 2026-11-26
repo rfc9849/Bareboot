@@ -37,7 +37,7 @@ impl Drop for Registration {
     }
 }
 
-pub fn register(info: AhbInfo) -> io::Result<(Handle, Registration)> {
+pub fn register(info: AhbInfo, resource: Option<(u32, u64)>) -> io::Result<(Handle, Registration)> {
     let buffers = BUFFERS.get().ok_or(io::ErrorKind::NotConnected)?;
     if info.metadata.is_empty()
         || info.metadata.len() > wire::MAX_METADATA
@@ -52,7 +52,14 @@ pub fn register(info: AhbInfo) -> io::Result<(Handle, Registration)> {
         return Err(io::Error::last_os_error());
     }
     let file = unsafe { File::from_raw_fd(fd) };
-    let seals = libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_WRITE | libc::F_SEAL_SEAL;
+    let mut seals = libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL;
+    if let Some((resource_id, size)) = resource {
+        use std::os::unix::fs::FileExt;
+        file.set_len(size.max(4096))?;
+        file.write_all_at(&resource_id.to_le_bytes(), 0)?;
+    } else {
+        seals |= libc::F_SEAL_WRITE;
+    }
     if unsafe { libc::fcntl(fd, libc::F_ADD_SEALS, seals) } != 0 {
         return Err(io::Error::last_os_error());
     }
@@ -98,10 +105,13 @@ fn start_media_bridge() {
                                 OwnedDescriptor::from_raw_descriptor(std::os::fd::IntoRawFd::into_raw_fd(f))
                             })
                             .collect();
-                        if let Ok((handle, reg)) = register(AhbInfo {
-                            metadata: buf[1..n].to_vec(),
-                            fds: owned,
-                        }) {
+                        if let Ok((handle, reg)) = register(
+                            AhbInfo {
+                                metadata: buf[1..n].to_vec(),
+                                fds: owned,
+                            },
+                            None,
+                        ) {
                             let id = NEXT_REG_ID.fetch_add(1, Ordering::Relaxed);
                             regs.insert(id, reg);
                             let mut resp = [0u8; 9];
