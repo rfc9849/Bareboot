@@ -18,6 +18,17 @@ python3 tools/device_smoke.py --rootfs debian-trixie-arm64.tar.xz   # phone over
 
 An Android 16 ARM64 emulator rooted with [rootAVD](https://gitlab.com/newbit/rootAVD) works for everything except the GPU.
 
+## Releases
+
+Update the version in `ksu-module/module.prop` (including `versionCode`), `rust/Cargo.toml`, and `tools/desktop/Cargo.toml`, then push a matching tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions builds the GPU host/guest bundle, signed APK, root module ZIP, benchmark binary, and desktop companion archives, verifies 16 KiB ELF alignment and APK signature, generates `SHA256SUMS.txt`, and publishes the GitHub Release.
+
 ## Rules
 
 - Linux runs natively. No emulation or PRoot.

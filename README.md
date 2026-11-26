@@ -69,7 +69,7 @@ systemd and Docker also need a kernel with PID namespaces. See [kernel features]
 3. If asked, tap **Action** on the Bareboot module.
 4. Pick a distribution.
 
-No release yet; build with `./build.sh`.
+Download `bareboot-module.zip` and `bareboot.apk` from [Releases](https://github.com/rfc9849/Bareboot/releases), or build from source with `./build.sh`.
 
 ## Docs
 

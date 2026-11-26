@@ -1,0 +1,420 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify all artifacts without publishing a GitHub Release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate release inputs
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate tag, versions, and signing secrets
+        id: meta
+        env:
+          HAS_KS: ${{ secrets.BAREBOOT_KEYSTORE_BASE64 != '' }}
+          HAS_KS_PASS: ${{ secrets.BAREBOOT_KEYSTORE_PASSWORD != '' }}
+          HAS_ALIAS: ${{ secrets.BAREBOOT_KEY_ALIAS != '' }}
+          HAS_KEY_PASS: ${{ secrets.BAREBOOT_KEY_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          mod_ver="$(awk -F= '/^version=/{print $2}' ksu-module/module.prop)"
+          rust_ver="$(awk -F'"' '/^version = "/{print $2; exit}' rust/Cargo.toml)"
+          desk_ver="$(awk -F'"' '/^version = "/{print $2; exit}' tools/desktop/Cargo.toml)"
+
+          if [[ "$mod_ver" != "$rust_ver" || "$mod_ver" != "$desk_ver" ]]; then
+            echo "Version mismatch: module.prop=$mod_ver rust=$rust_ver desktop=$desk_ver" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z.-]+))?$ ]]; then
+              echo "Tag must match vX.Y.Z or vX.Y.Z-prerelease (got $tag)" >&2
+              exit 1
+            fi
+            base_ver="${BASH_REMATCH[1]}"
+            if [[ "$base_ver" != "$mod_ver" ]]; then
+              echo "Tag base version ($base_ver) does not match ksu-module/module.prop ($mod_ver)" >&2
+              exit 1
+            fi
+            prerelease="false"
+            if [[ -n "${BASH_REMATCH[2]:-}" ]]; then
+              prerelease="true"
+            fi
+            publish="true"
+          else
+            tag="v${mod_ver}-dryrun"
+            prerelease="true"
+            if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+              publish="false"
+            else
+              publish="true"
+            fi
+          fi
+
+          if [[ "$HAS_KS" != "true" || "$HAS_KS_PASS" != "true" || "$HAS_ALIAS" != "true" || "$HAS_KEY_PASS" != "true" ]]; then
+            echo "Missing Android release signing secrets (BAREBOOT_KEYSTORE_BASE64, BAREBOOT_KEYSTORE_PASSWORD, BAREBOOT_KEY_ALIAS, BAREBOOT_KEY_PASSWORD)" >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  gpu-host:
+    name: Build GPU host bundle
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends meson ninja-build python3-mako pkg-config
+
+      - name: Install Rust 1.88.0 for Android
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK 28.2.13676358
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Build host GPU binaries
+        run: bash tools/gpu/build-host.sh
+
+      - name: Upload gpu-host artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-host
+          path: dist/gpu/host
+          retention-days: 1
+
+  gpu-guest:
+    name: Build GPU guest bundle (ARM64)
+    needs: validate
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build guest GPU libraries (Mesa glibc & musl)
+        run: bash tools/gpu/build-guest.sh
+
+      - name: Upload gpu-guest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-guest
+          path: dist/gpu/guest
+          retention-days: 1
+
+  android-and-module:
+    name: Build daemon, APK, module & bench
+    needs: [validate, gpu-host, gpu-guest]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download GPU host artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-host
+          path: dist/gpu/host
+
+      - name: Download GPU guest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-guest
+          path: dist/gpu/guest
+
+      - name: Restore GPU executable permissions
+        run: |
+          chmod 0755 dist/gpu/host/kumquat dist/gpu/host/bareboot-media
+          chmod 0755 dist/gpu/guest/bin/bareboot-gpu dist/gpu/guest/glibc/bin/check dist/gpu/guest/musl/bin/check
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+          components: clippy
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> target
+            tools/bench -> target
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      - name: Install Android SDK 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.BAREBOOT_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+
+      - name: Prefetch Rust crates
+        run: cargo fetch --locked --manifest-path rust/Cargo.toml
+
+      - name: Build signed APK and root module with GPU bundle
+        env:
+          BAREBOOT_GPU: prebuilt
+          BAREBOOT_KEYSTORE: ${{ runner.temp }}/release.keystore
+          BAREBOOT_KEYSTORE_PASSWORD: ${{ secrets.BAREBOOT_KEYSTORE_PASSWORD }}
+          BAREBOOT_KEY_ALIAS: ${{ secrets.BAREBOOT_KEY_ALIAS }}
+          BAREBOOT_KEY_PASSWORD: ${{ secrets.BAREBOOT_KEY_PASSWORD }}
+        run: ./build.sh
+
+      - name: Remove temporary keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs dist/bareboot-release.apk
+
+      - name: Verify 16 KiB ELF alignment
+        run: python3 tools/check_16k.py
+
+      - name: Build static benchmark binary
+        working-directory: tools/bench
+        run: |
+          cargo test --locked
+          cargo clippy --locked --target aarch64-unknown-linux-musl --all-targets -- -D warnings
+          cargo build --locked --release --target aarch64-unknown-linux-musl
+
+      - name: Stage release artifacts
+        run: |
+          mkdir -p release-out
+          cp dist/bareboot-module.zip release-out/bareboot-module.zip
+          cp dist/bareboot-release.apk release-out/bareboot.apk
+          cp tools/bench/target/aarch64-unknown-linux-musl/release/bareboot-bench release-out/bareboot-bench-aarch64-musl
+          chmod 0755 release-out/bareboot-bench-aarch64-musl
+
+      - name: Upload Android & module artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: release-out/*
+          retention-days: 1
+
+  desktop-macos:
+    name: Build Desktop (macOS arm64)
+    needs: validate
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache desktop Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/desktop -> target
+
+      - name: Install FFmpeg
+        run: brew install ffmpeg
+
+      - name: Build and package macOS app bundle
+        run: bash tools/desktop/package-macos.sh
+
+      - name: Upload macOS desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-desktop-macos
+          path: dist/bareboot-desktop-macos-arm64.zip
+          retention-days: 1
+
+  desktop-linux:
+    name: Build Desktop (Linux ${{ matrix.arch }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache desktop Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/desktop -> target
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             pkg-config libclang-dev             libavcodec-dev libavutil-dev libavformat-dev libswscale-dev libswresample-dev             libwayland-dev libxkbcommon-dev libx11-dev libxcb1-dev libxcb-render0-dev             libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev libfreetype-dev             libvulkan-dev libgl-dev libegl-dev
+
+      - name: Build release binary
+        run: cargo build --release --locked --manifest-path tools/desktop/Cargo.toml
+
+      - name: Package tarball
+        run: |
+          STAGE="$(mktemp -d)"
+          install -m 0755 tools/desktop/target/release/bareboot-desktop "$STAGE/bareboot-desktop"
+          cp LICENSE "$STAGE/LICENSE"
+          mkdir -p dist
+          tar -C "$STAGE" -czf "dist/bareboot-desktop-linux-${{ matrix.arch }}.tar.gz" bareboot-desktop LICENSE
+
+      - name: Upload Linux desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-desktop-linux-${{ matrix.arch }}
+          path: dist/bareboot-desktop-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 1
+
+  desktop-windows:
+    name: Build Desktop (Windows x86_64)
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache desktop Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/desktop -> target
+
+      - name: Install FFmpeg (LGPL shared)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-lgpl-shared-9.0.zip"
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg-extract" -Force
+          $dir = Get-ChildItem -Path "$env:RUNNER_TEMP\ffmpeg-extract" -Directory | Select-Object -First 1
+          Move-Item -Path $dir.FullName -Destination "C:\ffmpeg"
+          "FFMPEG_DIR=C:\ffmpeg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (Test-Path "C:\Program Files\LLVM\bin") {
+            "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Build release binary
+        shell: pwsh
+        run: cargo build --release --locked --manifest-path tools/desktop/Cargo.toml
+
+      - name: Package Windows zip
+        shell: pwsh
+        run: |
+          $stage = "$env:RUNNER_TEMP\win-pkg"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item "tools\desktop\target\release\bareboot-desktop.exe" "$stage\bareboot-desktop.exe"
+          Copy-Item "C:\ffmpeg\bin\*.dll" "$stage\"
+          Copy-Item "LICENSE" "$stage\LICENSE"
+          if (Test-Path "C:\ffmpeg\LICENSE.txt") {
+            Copy-Item "C:\ffmpeg\LICENSE.txt" "$stage\FFMPEG-LICENSE.txt"
+          }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          Compress-Archive -Path "$stage\*" -DestinationPath "dist\bareboot-desktop-windows-x86_64.zip" -Force
+
+      - name: Upload Windows desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-desktop-windows
+          path: dist/bareboot-desktop-windows-x86_64.zip
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    needs: [validate, android-and-module, desktop-macos, desktop-linux, desktop-windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        working-directory: release-assets
+        run: |
+          sha256sum $(ls -1 | sort) > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload combined release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bareboot-${{ needs.validate.outputs.tag }}
+          path: release-assets/*
+          retention-days: 7
+
+      - name: Publish GitHub Release
+        if: needs.validate.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: Bareboot ${{ needs.validate.outputs.tag }}
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          body: |
+            ### Install on Android
+
+            1. Install `bareboot-module.zip` in KernelSU or Magisk (reboot if prompted).
+            2. Install `bareboot.apk` and open Bareboot.
+            3. If asked, tap **Action** on the Bareboot module.
+
+            ### Desktop companion
+
+            - **macOS (Apple Silicon):** `bareboot-desktop-macos-arm64.zip` (requires `adb` and FFmpeg)
+            - **Linux:** `bareboot-desktop-linux-x86_64.tar.gz` / `bareboot-desktop-linux-arm64.tar.gz`
+            - **Windows:** `bareboot-desktop-windows-x86_64.zip`
+
+            Verify downloads against `SHA256SUMS.txt`.
+          files: release-assets/*

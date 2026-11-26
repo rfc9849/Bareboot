@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-and-android:
+    name: Rust, Bench & Android
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+          components: clippy
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> target
+            tools/bench -> target
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      - name: Install Android SDK 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Prefetch Rust crates
+        run: cargo fetch --locked --manifest-path rust/Cargo.toml
+
+      - name: Build daemon, APK, and root module (without GPU bundle)
+        env:
+          BAREBOOT_GPU: "0"
+        run: ./build.sh
+
+      - name: Verify 16 KiB ELF alignment
+        run: python3 tools/check_16k.py
+
+      - name: Test and build benchmark binary
+        working-directory: tools/bench
+        run: |
+          cargo test --locked
+          cargo clippy --locked --target aarch64-unknown-linux-musl --all-targets -- -D warnings
+          cargo build --locked --release --target aarch64-unknown-linux-musl
+
+      - name: Check Python tools syntax
+        run: python3 -m py_compile tools/check_16k.py tools/check_kernel.py tools/device_smoke.py tools/bench/report.py
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache desktop Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/desktop -> target
+
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             pkg-config libclang-dev             libavcodec-dev libavutil-dev libavformat-dev libswscale-dev libswresample-dev             libwayland-dev libxkbcommon-dev libx11-dev libxcb1-dev libxcb-render0-dev             libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev libfreetype-dev             libvulkan-dev libgl-dev libegl-dev
+
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-lgpl-shared-9.0.zip"
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg-extract" -Force
+          $dir = Get-ChildItem -Path "$env:RUNNER_TEMP\ffmpeg-extract" -Directory | Select-Object -First 1
+          Move-Item -Path $dir.FullName -Destination "C:\ffmpeg"
+          "FFMPEG_DIR=C:\ffmpeg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (Test-Path "C:\Program Files\LLVM\bin") {
+            "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Check desktop build
+        run: cargo check --locked --manifest-path tools/desktop/Cargo.toml
