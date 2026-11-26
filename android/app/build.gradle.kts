@@ -1,6 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val moduleProperties = Properties().apply {
+    rootProject.file("../ksu-module/module.prop").inputStream().use(::load)
 }
 
 android {
@@ -11,8 +17,8 @@ android {
         applicationId = "ch.ausfuhrli.bareboot"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = moduleProperties.getProperty("versionCode").toInt()
+        versionName = moduleProperties.getProperty("version")
 
         ndk {
             abiFilters += listOf("arm64-v8a")

@@ -6,6 +6,12 @@ DIST="$ROOT/dist"
 GPU="${BAREBOOT_GPU:-1}"
 GRADLE_BIN="${GRADLE_BIN:-$(command -v gradle || find "$HOME/.gradle/wrapper/dists" -path "*/bin/gradle" -type f 2>/dev/null | sort | tail -1)}"
 
+if [[ -n "${BAREBOOT_KEYSTORE:-}" ]]; then
+    : "${BAREBOOT_KEYSTORE_PASSWORD:?Set BAREBOOT_KEYSTORE_PASSWORD to sign the release APK}"
+    : "${BAREBOOT_KEY_ALIAS:?Set BAREBOOT_KEY_ALIAS to sign the release APK}"
+    : "${BAREBOOT_KEY_PASSWORD:?Set BAREBOOT_KEY_PASSWORD to sign the release APK}"
+fi
+
 mkdir -p "$DIST"
 
 echo "==> Building static aarch64-unknown-linux-musl bareboot"
@@ -32,12 +38,12 @@ echo "==> Building Android APK"
 )
 cp "$ROOT/android/app/build/outputs/apk/debug/app-debug.apk" "$DIST/bareboot-debug.apk"
 rm -f "$DIST/bareboot-release.apk" "$DIST/bareboot-release-unsigned.apk"
-for apk in "$ROOT"/android/app/build/outputs/apk/release/app-release*.apk; do
-    case "$apk" in
-        *-unsigned.apk) cp "$apk" "$DIST/bareboot-release-unsigned.apk" ;;
-        *) cp "$apk" "$DIST/bareboot-release.apk" ;;
-    esac
-done
+APK_DIR="$ROOT/android/app/build/outputs/apk/release"
+if [[ -n "${BAREBOOT_KEYSTORE:-}" ]]; then
+    cp "$APK_DIR/app-release.apk" "$DIST/bareboot-release.apk"
+else
+    cp "$APK_DIR/app-release-unsigned.apk" "$DIST/bareboot-release-unsigned.apk"
+fi
 
 echo "==> Packaging the root module zip (not installed automatically)"
 STAGE="$(mktemp -d)"
