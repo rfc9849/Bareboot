@@ -6,6 +6,7 @@ use std::{
 };
 
 pub const VERSION: u32 = 1;
+const CAP_HEVC: u32 = 1;
 const MAX_INPUT: usize = 64;
 const MAX_BACKLOG: usize = 8 << 20;
 
@@ -19,7 +20,7 @@ pub const VIDEO: u32 = 0x20;
 pub const PIXELS: u32 = 0x21;
 
 pub enum Event {
-    Hello { scale: i32, width: i32, height: i32 },
+    Hello { scale: i32, width: i32, height: i32, caps: u32 },
     Configure { id: u32, width: i32, height: i32 },
     Close { id: u32 },
     Focus { id: u32 },
@@ -227,6 +228,7 @@ impl Remote {
                     scale: (s as i32).clamp(1, 4),
                     width: (w as i32).clamp(320, 16384),
                     height: (h as i32).clamp(240, 16384),
+                    caps: word(4).unwrap_or(0),
                 }),
                 1 => return Err(io::Error::new(io::ErrorKind::InvalidData, "unsupported viewer version")),
                 2 => word(0).zip(word(1)).zip(word(2)).map(|((id, w), h)| Event::Configure {
@@ -1077,7 +1079,12 @@ impl State {
                 boost.input();
             }
             match event {
-                Event::Hello { scale, width, height } => self.remote_hello(scale, width, height),
+                Event::Hello { scale, width, height, caps } => {
+                    if let Some(direct) = &self.direct {
+                        direct.set_hevc(caps & CAP_HEVC != 0);
+                    }
+                    self.remote_hello(scale, width, height);
+                }
                 Event::Configure { id, width, height } => {
                     if let Some(root) = self.window_root(id) {
                         self.configure_window(&root, (width.min(super::MAX_EDGE), height.min(super::MAX_EDGE)));

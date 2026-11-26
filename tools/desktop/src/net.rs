@@ -158,6 +158,11 @@ pub fn connect(distro: &str) -> io::Result<Connection> {
 struct Decoder {
     decoder: ffmpeg::decoder::Video,
     failed: bool,
+    hevc: bool,
+}
+
+pub fn video_caps() -> u32 {
+    u32::from(ffmpeg::decoder::find(ffmpeg::codec::Id::HEVC).is_some())
 }
 
 fn hw_device() -> Option<*mut ffi::AVBufferRef> {
@@ -173,8 +178,8 @@ fn hw_device() -> Option<*mut ffi::AVBufferRef> {
 }
 
 impl Decoder {
-    fn new(device: Option<*mut ffi::AVBufferRef>) -> Option<Self> {
-        let codec = ffmpeg::decoder::find(ffmpeg::codec::Id::H264)?;
+    fn new(device: Option<*mut ffi::AVBufferRef>, hevc: bool) -> Option<Self> {
+        let codec = ffmpeg::decoder::find(if hevc { ffmpeg::codec::Id::HEVC } else { ffmpeg::codec::Id::H264 })?;
         let mut context = ffmpeg::codec::Context::new_with_codec(codec);
         unsafe {
             let raw = context.as_mut_ptr();
@@ -185,7 +190,7 @@ impl Decoder {
             }
         }
         let decoder = context.decoder().video().ok()?;
-        Some(Self { decoder, failed: false })
+        Some(Self { decoder, failed: false, hevc })
     }
 
     fn decode(&mut self, data: &[u8], mut out: impl FnMut(Frame, [f32; 6])) -> bool {
@@ -265,11 +270,15 @@ pub fn receive(stream: TcpStream, sender: Sender, mut emit: impl FnMut(Event)) {
             RESIZE => emit(Event::Resize(id, word(&body, 1))),
             VIDEO if len > 16 => {
                 let crop = (word(&body, 2), word(&body, 3));
+                let hevc = word(&body, 1) & 2 != 0;
+                if decoders.get(&id).is_some_and(|decoder| decoder.hevc != hevc) {
+                    decoders.remove(&id);
+                }
                 let decoder = match decoders.get_mut(&id) {
                     Some(decoder) => decoder,
-                    None => match Decoder::new(device) {
+                    None => match Decoder::new(device, hevc) {
                         Some(decoder) => decoders.entry(id).or_insert(decoder),
-                        None => return Err(io::Error::other("H.264 decoder is unavailable")),
+                        None => return Err(io::Error::other("video decoder is unavailable")),
                     },
                 };
                 let ok = decoder.decode(&body[16..], |frame, matrix| emit(Event::Video { id, frame, crop, matrix }));

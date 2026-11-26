@@ -88,7 +88,7 @@ impl ApplicationHandler<Event> for App {
             (m.scale_factor(), m.size().to_logical::<f64>(m.scale_factor()))
         });
         self.scale = (factor.ceil() as u32).clamp(1, 4);
-        self.sender.send(net::HELLO, &[net::VERSION, self.scale, size.width as u32, size.height as u32]);
+        self.sender.send(net::HELLO, &[net::VERSION, self.scale, size.width as u32, size.height as u32, net::video_caps()]);
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Event) {

@@ -191,6 +191,10 @@ impl Direct {
         ]);
     }
 
+    pub fn set_hevc(&self, hevc: bool) {
+        self.command(&[9, u32::from(hevc)]);
+    }
+
     pub fn keyframe(&self, stream: u32) {
         self.command(&[8, stream]);
     }

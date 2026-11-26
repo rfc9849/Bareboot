@@ -242,6 +242,7 @@ struct EncShared {
     PFNEGLWAITSYNCKHRPROC wait_sync;
     PFNEGLDUPNATIVEFENCEFDANDROIDPROC dup_fence_fd;
     PFNEGLPRESENTATIONTIMEANDROIDPROC set_pts;
+    bool hevc;
 };
 
 struct EncStream {
@@ -261,6 +262,7 @@ struct EncStream {
     volatile bool running;
     uint8_t sps[512];
     size_t sps_len;
+    bool hevc;
     pthread_mutex_t crop_lock;
     struct EncCrop crops[ENC_CROPS];
     uint32_t next_crop;
@@ -333,7 +335,7 @@ static void *enc_drain(void *arg) {
                         }
                     }
                     pthread_mutex_unlock(&s->crop_lock);
-                    uint32_t head[3] = {key ? 1u : 0u, crop_w, crop_h};
+                    uint32_t head[3] = {(key ? 1u : 0u) | (s->hevc ? 2u : 0u), crop_w, crop_h};
                     memcpy(full, head, 12);
                     if (prefix) memcpy(full + 12, s->sps, prefix);
                     memcpy(full + 12 + prefix, src, len);
@@ -416,12 +418,15 @@ static bool enc_start_codec(struct EncStream *s, int w, int h) {
     if (fast_rate < 60) fast_rate = 60;
     AMediaCodec *codec = NULL;
     ANativeWindow *win = NULL;
-    for (int attempt = 0; attempt < 3; attempt++) {
-        int32_t operating = attempt == 0 ? fast_rate : attempt == 1 ? fast_rate / 2 : 0;
-        codec = AMediaCodec_createEncoderByType("video/avc");
+    bool hevc = false;
+    for (int attempt = sh->hevc ? 0 : 3; attempt < 6; attempt++) {
+        hevc = attempt < 3;
+        int32_t operating = attempt % 3 == 0 ? fast_rate : attempt % 3 == 1 ? fast_rate / 2 : 0;
+        const char *mime = hevc ? "video/hevc" : "video/avc";
+        codec = AMediaCodec_createEncoderByType(mime);
         if (!codec) continue;
         AMediaFormat *fmt = AMediaFormat_new();
-        AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
+        AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, mime);
         AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, ew);
         AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, eh);
         AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_BIT_RATE, (int32_t)rate);
@@ -454,6 +459,7 @@ static bool enc_start_codec(struct EncStream *s, int w, int h) {
         return false;
     }
     s->codec = codec;
+    s->hevc = hevc;
     s->win = win;
     s->surf = surf;
     s->enc_w = ew;
@@ -800,6 +806,14 @@ static void *encoder_thread(void *arg) {
             enc_remove_layer(&sh, f[1], f[2]);
         } else if (f[0] == 5 && n == 56) {
             enc_relayout(&sh, f);
+        } else if (f[0] == 9 && n == 8) {
+            bool hevc = (f[1] & 1) != 0;
+            if (sh.hevc != hevc) {
+                sh.hevc = hevc;
+                for (int i = 0; i < ENC_MAX_STREAMS; i++) {
+                    if (g_streams[i].used) enc_close(&g_streams[i]);
+                }
+            }
         } else if (f[0] == 8 && n == 8) {
             struct EncStream *s = enc_stream(&sh, f[1], false);
             if (s && s->codec) {
@@ -1159,7 +1173,7 @@ static void *client_thread(void *arg) {
             }
             if (st == AMEDIA_OK) st = AImageReader_getWindow(reader, &win);
             if (st == AMEDIA_OK) {
-                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
+                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, mime);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, (int32_t)w);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, (int32_t)h);
                 if (csd0_len > 0) AMediaFormat_setBuffer(fmt, "csd-0", buf + 20, csd0_len);
@@ -1276,7 +1290,7 @@ static void *client_thread(void *arg) {
             }
             if (st == AMEDIA_OK) st = AImageReader_getWindow(reader, &win);
             if (st == AMEDIA_OK) {
-                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
+                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, mime);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, (int32_t)w);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, (int32_t)h);
                 AMediaFormat_setInt32(fmt, "operating-rate", 120);
