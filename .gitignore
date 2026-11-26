@@ -1,0 +1,12 @@
+/rust/target/
+/tools/desktop/target/
+/tools/__pycache__/
+/dist/
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.img
+*.tar.xz
+*.tar.gz
+.DS_Store

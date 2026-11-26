@@ -1,0 +1,15 @@
+[package]
+name = "bareboot-display"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+protocol.workspace = true
+wayland-server = "0.31.14"
+wayland-scanner = "0.31.11"
+wayland-backend = "0.3.17"
+wayland-protocols = { version = "0.32.13", features = ["server", "unstable"] }
+bitflags = "2"
+lz4_flex = { version = "0.14", default-features = false, features = ["std"] }

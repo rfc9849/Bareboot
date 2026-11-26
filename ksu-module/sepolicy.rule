@@ -1,0 +1,472 @@
+type bareboot_daemon domain
+enforce bareboot_daemon
+typeattribute bareboot_daemon mlstrustedsubject
+typeattribute bareboot_daemon netdomain
+
+type bareboot_guest domain
+enforce bareboot_guest
+typeattribute bareboot_guest mlstrustedsubject
+typeattribute bareboot_guest netdomain
+
+type bareboot_guest_file file_type
+typeattribute bareboot_guest_file fs_type
+
+type bareboot_socket file_type
+typeattribute bareboot_socket mlstrustedobject
+
+allow bareboot_guest_file bareboot_guest_file filesystem associate
+allow bareboot_socket tmpfs filesystem associate
+allow bareboot_socket labeledfs filesystem associate
+
+allow ksu bareboot_daemon process { transition dyntransition }
+allow ksu bareboot_daemon fd use
+allow ksu bareboot_daemon unix_stream_socket { read write connectto getopt getattr }
+allow ksu bareboot_socket dir { search getattr }
+allow ksu bareboot_socket sock_file { getattr write }
+
+allow untrusted_app_all socket_device dir search
+allow untrusted_app_all bareboot_socket dir search
+allow untrusted_app_all bareboot_socket sock_file { getattr write }
+allow untrusted_app_all bareboot_daemon fd use
+allow untrusted_app_all bareboot_daemon unix_stream_socket { read write connectto getopt getattr }
+allow untrusted_app_all devpts chr_file { read write ioctl getattr }
+allowxperm untrusted_app_all devpts chr_file ioctl { 0x5400-0x54ff }
+
+allow servicemanager bareboot_daemon binder transfer
+allow system_server bareboot_daemon fd use
+allow system_server bareboot_daemon fifo_file { write getattr }
+
+allow bareboot_daemon bareboot_daemon process *
+allow bareboot_daemon kernel process { getsched setsched }
+allow bareboot_daemon bareboot_daemon capability *
+allow bareboot_daemon bareboot_daemon capability2 *
+allow bareboot_daemon bareboot_daemon fd *
+allow bareboot_daemon bareboot_daemon dir *
+allow bareboot_daemon bareboot_daemon file *
+allow bareboot_daemon bareboot_daemon lnk_file *
+allow bareboot_daemon bareboot_daemon fifo_file *
+allow bareboot_daemon bareboot_daemon unix_stream_socket *
+allow bareboot_daemon bareboot_daemon unix_dgram_socket *
+allow bareboot_daemon bareboot_daemon netlink_route_socket *
+allow bareboot_daemon bareboot_daemon netlink_kobject_uevent_socket *
+allow bareboot_daemon bareboot_daemon tcp_socket *
+allow bareboot_daemon bareboot_daemon udp_socket *
+allow bareboot_daemon bareboot_daemon rawip_socket *
+allow bareboot_daemon bareboot_daemon icmp_socket *
+allow bareboot_daemon bareboot_daemon tun_socket *
+allowxperm bareboot_daemon bareboot_daemon dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon unix_stream_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon unix_dgram_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon netlink_route_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon tcp_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon udp_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon rawip_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_daemon icmp_socket ioctl { 0x0000-0xffff }
+allow bareboot_daemon bareboot_guest process { transition signal sigkill signull sigchld getsched setsched noatsecure rlimitinh siginh }
+allow bareboot_daemon bareboot_guest fd use
+allow bareboot_daemon socket_device dir { create getattr open read search setattr write add_name remove_name rmdir relabelfrom }
+allow bareboot_daemon socket_device sock_file { create getattr open read setattr unlink write relabelfrom }
+allow bareboot_daemon bareboot_socket dir { create getattr open read search setattr write add_name remove_name rmdir relabelfrom relabelto }
+allow bareboot_daemon bareboot_socket sock_file { create getattr open read setattr unlink write relabelfrom relabelto }
+allow bareboot_daemon unlabeled sock_file { getattr unlink relabelfrom }
+allow bareboot_daemon adb_data_file dir *
+allow bareboot_daemon adb_data_file file *
+allow bareboot_daemon adb_data_file lnk_file *
+allow bareboot_daemon bareboot_guest_file dir *
+allow bareboot_daemon bareboot_guest_file file *
+allow bareboot_daemon bareboot_guest_file lnk_file *
+allow bareboot_daemon bareboot_guest_file chr_file *
+allow bareboot_daemon bareboot_guest_file blk_file *
+allow bareboot_daemon bareboot_guest_file fifo_file *
+allow bareboot_daemon bareboot_guest_file sock_file *
+allow bareboot_daemon tmpfs dir *
+allow bareboot_daemon tmpfs file *
+allow bareboot_daemon tmpfs lnk_file *
+allow bareboot_daemon tmpfs chr_file *
+allow bareboot_daemon tmpfs blk_file *
+allow bareboot_daemon tmpfs fifo_file *
+allow bareboot_daemon tmpfs sock_file *
+allow bareboot_daemon devpts dir *
+allow bareboot_daemon devpts chr_file *
+allow bareboot_daemon cgroup dir *
+allow bareboot_daemon cgroup file *
+allow bareboot_daemon cgroup_v2 dir *
+allow bareboot_daemon cgroup_v2 file *
+allow bareboot_daemon unlabeled dir *
+allow bareboot_daemon unlabeled file *
+allow bareboot_daemon unlabeled lnk_file *
+allow bareboot_daemon unlabeled chr_file *
+allow bareboot_daemon unlabeled blk_file *
+allow bareboot_daemon unlabeled fifo_file *
+allow bareboot_daemon unlabeled sock_file *
+allow bareboot_daemon unlabeled filesystem *
+allow bareboot_daemon fs_type filesystem { mount unmount remount getattr relabelfrom relabelto }
+allow bareboot_daemon bareboot_guest_file filesystem { mount unmount remount getattr relabelfrom relabelto }
+allow bareboot_daemon rootfs dir { getattr open read search mounton }
+allow bareboot_daemon rootfs file { getattr open read write mounton }
+allow bareboot_daemon rootfs lnk_file { getattr read }
+allow bareboot_daemon proc_type dir { getattr open read search mounton }
+allow bareboot_daemon proc_type file { getattr open read write mounton }
+allow bareboot_daemon proc_type lnk_file { getattr read }
+allow bareboot_daemon sysfs_type dir { getattr open read search mounton }
+allow bareboot_daemon sysfs_type file { getattr open read write mounton }
+allow bareboot_daemon sysfs_type lnk_file { getattr read }
+allow bareboot_daemon debugfs_type dir { getattr open read search mounton }
+allow bareboot_daemon debugfs_type file { getattr open read write mounton }
+allow bareboot_daemon debugfs_type lnk_file { getattr read }
+allow bareboot_daemon tracefs_type dir { getattr open read search mounton }
+allow bareboot_daemon tracefs_type file { getattr open read write mounton }
+allow bareboot_daemon tracefs_type lnk_file { getattr read }
+allow bareboot_daemon securityfs dir { getattr open read search mounton }
+allow bareboot_daemon securityfs file { getattr open read write mounton }
+allow bareboot_daemon securityfs lnk_file { getattr read }
+allow bareboot_daemon media_rw_data_file dir *
+allow bareboot_daemon media_rw_data_file file *
+allow bareboot_daemon media_rw_data_file lnk_file *
+allow bareboot_daemon fuse dir *
+allow bareboot_daemon fuse file *
+allow bareboot_daemon fuse lnk_file *
+allow bareboot_daemon sdcardfs dir *
+allow bareboot_daemon sdcardfs file *
+allow bareboot_daemon sdcardfs lnk_file *
+allow bareboot_daemon mnt_user_file dir *
+allow bareboot_daemon mnt_user_file file *
+allow bareboot_daemon mnt_user_file lnk_file *
+allow bareboot_daemon storage_file dir *
+allow bareboot_daemon storage_file file *
+allow bareboot_daemon storage_file lnk_file *
+allow bareboot_daemon shell_data_file dir { getattr open read search write add_name remove_name create rmdir setattr mounton }
+allow bareboot_daemon shell_data_file file { getattr open read write append create unlink rename setattr lock map mounton }
+allow bareboot_daemon shell_data_file lnk_file { getattr read create unlink rename setattr }
+allow bareboot_daemon system_data_file dir { getattr open read search write add_name remove_name create rmdir setattr mounton }
+allow bareboot_daemon system_data_file file { getattr open read write append create unlink rename setattr lock map mounton }
+allow bareboot_daemon system_data_file lnk_file { getattr read create unlink rename setattr }
+allow bareboot_daemon system_data_root_file dir { getattr open read search write add_name remove_name create rmdir setattr mounton }
+allow bareboot_daemon system_data_root_file file { getattr open read write append create unlink rename setattr lock map mounton }
+allow bareboot_daemon system_data_root_file lnk_file { getattr read create unlink rename setattr }
+allow bareboot_daemon app_data_file dir { getattr open read search }
+allow bareboot_daemon app_data_file file { getattr open read }
+allow bareboot_daemon app_data_file lnk_file { getattr read }
+allow bareboot_daemon app_data_file_type dir { getattr open read search }
+allow bareboot_daemon app_data_file_type file { getattr open read }
+allow bareboot_daemon app_data_file_type lnk_file { getattr read }
+allow bareboot_daemon system_file dir { getattr open read search }
+allow bareboot_daemon system_file file { getattr open read execute execute_no_trans map }
+allow bareboot_daemon system_file lnk_file { getattr read }
+allow bareboot_daemon system_file_type dir { getattr open read search }
+allow bareboot_daemon system_file_type file { getattr open read execute execute_no_trans map }
+allow bareboot_daemon system_file_type lnk_file { getattr read }
+allow bareboot_daemon exec_type dir { getattr open read search }
+allow bareboot_daemon exec_type file { getattr open read execute execute_no_trans map }
+allow bareboot_daemon exec_type lnk_file { getattr read }
+allow bareboot_daemon device dir { getattr open read search }
+allow bareboot_daemon block_device dir { getattr open read search }
+allow bareboot_daemon dev_type blk_file getattr
+allow bareboot_daemon dev_type chr_file getattr
+allow bareboot_daemon file_type file getattr
+allow bareboot_daemon file_type dir { getattr search }
+allow bareboot_daemon loop_control_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon loop_device blk_file { getattr open read write ioctl }
+allow bareboot_daemon tun_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon null_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon zero_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon random_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon ptmx_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon tty_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon owntty_device chr_file { getattr open read write ioctl }
+allow bareboot_daemon binder_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_daemon loop_control_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon tun_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon binder_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon devpts chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon ptmx_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon tty_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon owntty_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon loop_device blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon adb_data_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon adb_data_file file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_guest_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon bareboot_guest_file file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon tmpfs dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon tmpfs file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon media_rw_data_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon media_rw_data_file file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon fuse dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon fuse file ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon shell_data_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_daemon shell_data_file file ioctl { 0x0000-0xffff }
+allow bareboot_daemon servicemanager binder call
+allow bareboot_daemon system_server binder call
+allow bareboot_daemon service_manager_type service_manager find
+allow bareboot_daemon property_type file { getattr open read map }
+allow bareboot_daemon selinuxfs dir { getattr open read search }
+allow bareboot_daemon selinuxfs file { getattr open read write }
+allow bareboot_daemon domain dir { getattr open read search }
+allow bareboot_daemon domain file { getattr open read }
+allow bareboot_daemon domain lnk_file { getattr read }
+allow bareboot_daemon port_type tcp_socket { name_bind name_connect }
+allow bareboot_daemon port_type udp_socket name_bind
+allow bareboot_daemon node_type tcp_socket node_bind
+allow bareboot_daemon node_type udp_socket node_bind
+allow bareboot_daemon node_type rawip_socket node_bind
+allow bareboot_daemon netif netif { ingress egress }
+
+allow bareboot_guest bareboot_guest process *
+allow bareboot_guest bareboot_guest capability *
+allow bareboot_guest bareboot_guest capability2 *
+allow bareboot_guest bareboot_guest fd *
+allow bareboot_guest bareboot_guest dir *
+allow bareboot_guest bareboot_guest file *
+allow bareboot_guest bareboot_guest lnk_file *
+allow bareboot_guest bareboot_guest fifo_file *
+allow bareboot_guest bareboot_guest sock_file *
+allow bareboot_guest bareboot_guest unix_stream_socket *
+allow bareboot_guest bareboot_guest unix_dgram_socket *
+allow bareboot_guest bareboot_guest netlink_route_socket *
+allow bareboot_guest bareboot_guest netlink_netfilter_socket *
+allow bareboot_guest bareboot_guest netlink_xfrm_socket *
+allow bareboot_guest bareboot_guest netlink_kobject_uevent_socket *
+allow bareboot_guest bareboot_guest netlink_audit_socket *
+allow bareboot_guest bareboot_guest netlink_generic_socket *
+allow bareboot_guest bareboot_guest packet_socket *
+allow bareboot_guest bareboot_guest tcp_socket *
+allow bareboot_guest bareboot_guest udp_socket *
+allow bareboot_guest bareboot_guest rawip_socket *
+allow bareboot_guest bareboot_guest icmp_socket *
+allow bareboot_guest bareboot_guest key_socket *
+allow bareboot_guest bareboot_guest sem *
+allow bareboot_guest bareboot_guest shm *
+allow bareboot_guest bareboot_guest msg *
+allow bareboot_guest bareboot_guest msgq *
+allow bareboot_guest bareboot_guest ipc *
+allow bareboot_guest bareboot_guest tun_socket *
+allow bareboot_guest bareboot_guest key *
+allow bareboot_guest bareboot_guest bpf *
+allow bareboot_guest kernel key { link search view read }
+allowxperm bareboot_guest bareboot_guest dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest unix_stream_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest unix_dgram_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_route_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_netfilter_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_xfrm_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_kobject_uevent_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_audit_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest netlink_generic_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest packet_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest tcp_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest udp_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest rawip_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest icmp_socket ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest key_socket ioctl { 0x0000-0xffff }
+allow bareboot_guest bareboot_daemon fd use
+allow bareboot_guest bareboot_daemon fifo_file { read write getattr ioctl }
+allow bareboot_guest bareboot_daemon unix_stream_socket { read write getattr ioctl }
+allowxperm bareboot_guest bareboot_daemon fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_daemon unix_stream_socket ioctl { 0x0000-0xffff }
+allow bareboot_guest bareboot_daemon process sigchld
+allow bareboot_guest bareboot_guest_file dir *
+allow bareboot_guest bareboot_guest_file file *
+allow bareboot_guest bareboot_guest_file lnk_file *
+allow bareboot_guest bareboot_guest_file chr_file *
+allow bareboot_guest bareboot_guest_file blk_file *
+allow bareboot_guest bareboot_guest_file fifo_file *
+allow bareboot_guest bareboot_guest_file sock_file *
+allow bareboot_guest tmpfs dir *
+allow bareboot_guest tmpfs file *
+allow bareboot_guest tmpfs lnk_file *
+allow bareboot_guest tmpfs chr_file *
+allow bareboot_guest tmpfs blk_file *
+allow bareboot_guest tmpfs fifo_file *
+allow bareboot_guest tmpfs sock_file *
+allow bareboot_guest devpts dir *
+allow bareboot_guest devpts file *
+allow bareboot_guest devpts lnk_file *
+allow bareboot_guest devpts chr_file *
+allow bareboot_guest devpts blk_file *
+allow bareboot_guest devpts fifo_file *
+allow bareboot_guest devpts sock_file *
+allow bareboot_guest cgroup dir *
+allow bareboot_guest cgroup file *
+allow bareboot_guest cgroup lnk_file *
+allow bareboot_guest cgroup chr_file *
+allow bareboot_guest cgroup blk_file *
+allow bareboot_guest cgroup fifo_file *
+allow bareboot_guest cgroup sock_file *
+allow bareboot_guest cgroup_v2 dir *
+allow bareboot_guest cgroup_v2 file *
+allow bareboot_guest cgroup_v2 lnk_file *
+allow bareboot_guest cgroup_v2 chr_file *
+allow bareboot_guest cgroup_v2 blk_file *
+allow bareboot_guest cgroup_v2 fifo_file *
+allow bareboot_guest cgroup_v2 sock_file *
+allow bareboot_guest mqueue dir *
+allow bareboot_guest mqueue file *
+allow bareboot_guest mqueue lnk_file *
+allow bareboot_guest mqueue chr_file *
+allow bareboot_guest mqueue blk_file *
+allow bareboot_guest mqueue fifo_file *
+allow bareboot_guest mqueue sock_file *
+allow bareboot_guest unlabeled dir *
+allow bareboot_guest unlabeled file *
+allow bareboot_guest unlabeled lnk_file *
+allow bareboot_guest unlabeled chr_file *
+allow bareboot_guest unlabeled blk_file *
+allow bareboot_guest unlabeled fifo_file *
+allow bareboot_guest unlabeled sock_file *
+allowxperm bareboot_guest bareboot_guest_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest_file file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest_file chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest_file blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest_file fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest bareboot_guest_file sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tmpfs sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest devpts sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest cgroup_v2 sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest mqueue sock_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled blk_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled fifo_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest unlabeled sock_file ioctl { 0x0000-0xffff }
+allow bareboot_guest fs_type filesystem *
+allow bareboot_guest bareboot_guest_file filesystem *
+allow bareboot_guest unlabeled filesystem *
+allow bareboot_guest rootfs dir { getattr open read search mounton }
+allow bareboot_guest rootfs file { getattr open read write ioctl mounton }
+allow bareboot_guest rootfs lnk_file { getattr read }
+allow bareboot_guest proc_type dir { getattr open read search mounton }
+allow bareboot_guest proc_type file { getattr open read write ioctl mounton }
+allow bareboot_guest proc_type lnk_file { getattr read }
+allow bareboot_guest sysfs_type dir { getattr open read search mounton }
+allow bareboot_guest sysfs_type file { getattr open read write ioctl mounton }
+allow bareboot_guest sysfs_type lnk_file { getattr read }
+allow bareboot_guest debugfs_type dir { getattr open read search mounton }
+allow bareboot_guest debugfs_type file { getattr open read write ioctl mounton }
+allow bareboot_guest debugfs_type lnk_file { getattr read }
+allow bareboot_guest tracefs_type dir { getattr open read search mounton }
+allow bareboot_guest tracefs_type file { getattr open read write ioctl mounton }
+allow bareboot_guest tracefs_type lnk_file { getattr read }
+allow bareboot_guest securityfs dir { getattr open read search mounton }
+allow bareboot_guest securityfs file { getattr open read write ioctl mounton }
+allow bareboot_guest securityfs lnk_file { getattr read }
+allowxperm bareboot_guest rootfs dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest rootfs file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest proc_type dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest proc_type file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest sysfs_type dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest sysfs_type file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest debugfs_type dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest debugfs_type file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tracefs_type dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tracefs_type file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest securityfs dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest securityfs file ioctl { 0x0000-0xffff }
+allow bareboot_guest media_rw_data_file dir { getattr open read search write add_name remove_name create rmdir setattr rename }
+allow bareboot_guest media_rw_data_file file { getattr open read write append create unlink rename setattr lock map }
+allow bareboot_guest media_rw_data_file lnk_file { getattr read create unlink rename setattr }
+allow bareboot_guest fuse dir { getattr open read search write add_name remove_name create rmdir setattr rename }
+allow bareboot_guest fuse file { getattr open read write append create unlink rename setattr lock map }
+allow bareboot_guest fuse lnk_file { getattr read create unlink rename setattr }
+allow bareboot_guest sdcardfs dir { getattr open read search write add_name remove_name create rmdir setattr rename }
+allow bareboot_guest sdcardfs file { getattr open read write append create unlink rename setattr lock map }
+allow bareboot_guest sdcardfs lnk_file { getattr read create unlink rename setattr }
+allowxperm bareboot_guest media_rw_data_file dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest media_rw_data_file file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest fuse dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest fuse file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest sdcardfs dir ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest sdcardfs file ioctl { 0x0000-0xffff }
+allow bareboot_guest null_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest zero_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest random_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest ptmx_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest tty_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest owntty_device chr_file { getattr open read write ioctl map }
+allow bareboot_guest tun_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_guest null_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest zero_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest random_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest ptmx_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tty_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest owntty_device chr_file ioctl { 0x0000-0xffff }
+allowxperm bareboot_guest tun_device chr_file ioctl { 0x0000-0xffff }
+allow bareboot_guest port_type tcp_socket { name_bind name_connect }
+allow bareboot_guest port_type udp_socket name_bind
+allow bareboot_guest node_type tcp_socket node_bind
+allow bareboot_guest node_type udp_socket node_bind
+allow bareboot_guest node_type rawip_socket node_bind
+allow bareboot_guest netif netif { ingress egress }
+
+type bareboot_display domain
+enforce bareboot_display
+type bareboot_display_exec file_type
+typeattribute bareboot_display_exec exec_type
+type bareboot_display_socket file_type
+type bareboot_display_mem file_type
+
+allow bareboot_display_exec labeledfs filesystem associate
+allow bareboot_display_socket tmpfs filesystem associate
+allow bareboot_display_mem tmpfs filesystem associate
+allow bareboot_daemon bareboot_display process { transition signal sigkill signull rlimitinh siginh }
+allow bareboot_daemon bareboot_display process2 nosuid_transition
+allow bareboot_daemon bareboot_display_exec file { getattr open read execute map }
+allow bareboot_display bareboot_display_exec file { entrypoint getattr open read execute map }
+allow bareboot_display bareboot_daemon process sigchld
+allow bareboot_display bareboot_daemon fd use
+allow bareboot_display bareboot_daemon unix_stream_socket { read write getattr getopt setopt shutdown }
+allow untrusted_app_all bareboot_daemon unix_stream_socket shutdown
+
+allow bareboot_daemon bareboot_display_socket dir { getattr search setattr mounton rmdir relabelto remove_name write }
+allow bareboot_daemon bareboot_display_socket sock_file { getattr unlink }
+allow bareboot_display bareboot_display_socket dir { getattr search write add_name remove_name }
+allow bareboot_display bareboot_display_socket sock_file { create getattr unlink }
+type_transition bareboot_display bareboot_display_socket sock_file bareboot_display_socket
+allow bareboot_guest bareboot_display_socket dir { getattr search }
+allow bareboot_guest bareboot_display_socket sock_file { getattr write }
+allow bareboot_guest bareboot_display unix_stream_socket connectto
+allow bareboot_display bareboot_display unix_stream_socket { create bind listen accept read write getattr getopt setopt shutdown }
+allow bareboot_display bareboot_display process fork
+allow bareboot_display bareboot_display fd use
+allow bareboot_display bareboot_display dir { getattr search }
+allow bareboot_display bareboot_display lnk_file read
+allow bareboot_display null_device chr_file { getattr open read write }
+allow bareboot_display bareboot_guest fd use
+allow bareboot_display bareboot_guest fifo_file { read write getattr }
+allow bareboot_display tmpfs file { getattr read write }
+allow bareboot_display bareboot_guest_file file { getattr read write }
+type_transition bareboot_display tmpfs file bareboot_display_mem
+allow bareboot_display bareboot_display_mem file { create getattr open read write setattr }
+allow bareboot_guest bareboot_display fd use
+allow bareboot_guest bareboot_display_mem file { getattr read write map }

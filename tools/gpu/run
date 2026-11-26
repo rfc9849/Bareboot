@@ -1,0 +1,67 @@
+#!/bin/sh
+set -eu
+root=/run/bareboot-gpu
+if [ -x /lib/ld-musl-aarch64.so.1 ]; then
+    bundle=$root/guest/musl
+else
+    bundle=$root/guest/glibc
+fi
+set_vulkan_env() {
+    export VIRTGPU_KUMQUAT=1 VIRTGPU_KUMQUAT_SOCKET_PATH="$root/socket/kumquat-gpu-0"
+    export VK_DRIVER_FILES="$bundle/share/vulkan/icd.d/gfxstream_vk_icd.aarch64.json"
+    export MESA_LOADER_DRIVER_OVERRIDE=zink
+    export MOZ_DRM_DEVICE=/dev/null
+    export MOZ_DISABLE_RDD_SANDBOX=1
+    if [ -d "$bundle/lib/hwdec" ]; then
+        export LD_LIBRARY_PATH="$bundle/lib/hwdec${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+    if [ -f "$bundle/share/glvnd/egl_vendor.d/10_bareboot.json" ]; then
+        export __EGL_VENDOR_LIBRARY_FILENAMES="$bundle/share/glvnd/egl_vendor.d/10_bareboot.json"
+    elif [ -f "$bundle/lib/libEGL.so.1" ]; then
+        export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+}
+set_vnc_env() {
+    export MESA_VK_WSI_DEBUG=sw MESA_LOADER_DRIVER_OVERRIDE=zink LIBGL_KOPPER_DRI2=true
+}
+run_probe() (
+    if [ ! -S "$root/socket/kumquat-gpu-0" ]; then
+        printf '%s\n' 'GPU renderer socket is missing.' >&2
+        return 1
+    fi
+    set_vulkan_env
+    timeout -k 2 15 "$bundle/bin/check" "$bundle/share/bareboot-gpu/compute.spv"
+)
+check_vnc() (
+    if [ -z "${DISPLAY:-}" ] || ! command -v glxinfo >/dev/null; then
+        printf '%s\n' 'Start the X11 display and install glxinfo before using run-vnc.' >&2
+        return 1
+    fi
+    set_vulkan_env
+    set_vnc_env
+    if renderer=$(LC_ALL=C timeout -k 2 15 glxinfo -B) &&
+       printf '%s\n' "$renderer" | grep -Eq '^OpenGL renderer string: zink .*Virtio-GPU GFXStream'; then
+        return 0
+    fi
+    printf '%s\n' 'Zink did not select Gfxstream on this display.' >&2
+    return 1
+)
+case "${1:-}" in
+    check) run_probe; exit ;;
+    play) shift; exec "$bundle/bin/bareboot-play" "$@" ;;
+    run|run-vnc) mode=$1; shift ;;
+    *) printf 'Usage: %s check | play FILE_OR_URL | run COMMAND [ARG ...] | run-vnc COMMAND [ARG ...]\n' "$0" >&2; exit 2 ;;
+esac
+if [ "$#" -eq 0 ]; then
+    printf '%s\n' 'Missing command.' >&2
+    exit 2
+fi
+if run_probe >&2 && { [ "$mode" != run-vnc ] || check_vnc >&2; }; then
+    set_vulkan_env
+    if [ "$mode" = run-vnc ]; then
+        set_vnc_env
+    fi
+else
+    printf '%s\n' 'GPU check failed. Starting with the guest default drivers.' >&2
+fi
+exec "$@"

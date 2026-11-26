@@ -1,0 +1,160 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index e81a6c4..b5f5c5e 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -39,5 +39,8 @@ magma-gpu = { path = "third_party/mesa3d/src/virtio/magma-gpu-rs/lib", version =
+ # To build latest Vulkano, change version to git = "https://github.com/vulkano-rs/vulkano.git"
+ vulkano = { version = "0.33.0", optional = true }
+ 
++[target.'cfg(target_os = "android")'.dependencies]
++nativewindow = { path = "../nativewindow" }
++
+ [build-dependencies]
+ pkg-config = "0.3"
+diff --git a/kumquat/server/src/kumquat_gpu/mod.rs b/kumquat/server/src/kumquat_gpu/mod.rs
+index ffa104c..4feeb0e 100644
+--- a/kumquat/server/src/kumquat_gpu/mod.rs
++++ b/kumquat/server/src/kumquat_gpu/mod.rs
+@@ -9,6 +9,7 @@ use std::path::Path;
+ use std::process::Command;
+ use std::sync::Arc;
+ use std::sync::Mutex;
++use std::sync::Weak;
+ 
+ use log::error;
+ use magma_gpu::protocols::ipc::Message;
+@@ -115,6 +116,8 @@ pub struct KumquatGpuResource {
+     resource_id: u32,
+     rutabaga: Arc<Mutex<Rutabaga>>,
+     mapping: Option<MemoryMapping>,
++    #[cfg(target_os = "android")]
++    _presentation: Option<crate::bareboot_ahb::Registration>,
+ }
+ 
+ impl Drop for KumquatGpuResource {
+@@ -176,6 +179,7 @@ pub struct KumquatGpu {
+     rutabaga: Arc<Mutex<Rutabaga>>,
+     fence_state: FenceState,
+     id_allocator: u32,
++    shared_resources: Map<u32, Weak<KumquatGpuResource>>,
+ }
+ 
+ impl KumquatGpu {
+@@ -236,6 +240,7 @@ impl KumquatGpu {
+             rutabaga: Arc::new(Mutex::new(rutabaga)),
+             fence_state,
+             id_allocator: 0,
++            shared_resources: Default::default(),
+         })
+     }
+ 
+@@ -347,7 +352,13 @@ impl KumquatGpuConnection {
+                     let resource = self
+                         .contexts
+                         .values()
+-                        .find_map(|ctx| ctx.resources.get(&cmd.resource_id).cloned());
++                        .find_map(|ctx| ctx.resources.get(&cmd.resource_id).cloned())
++                        .or_else(|| {
++                            kumquat_gpu
++                                .shared_resources
++                                .get(&cmd.resource_id)
++                                .and_then(Weak::upgrade)
++                        });
+                     if let Some(res) = resource {
+                         if let Some(target_ctx) = self.contexts.get_mut(&cmd.ctx_id) {
+                             target_ctx.resources.insert(cmd.resource_id, res);
+@@ -427,7 +438,12 @@ impl KumquatGpuConnection {
+                         resource_id,
+                         rutabaga: kumquat_gpu.rutabaga.clone(),
+                         mapping: Some(mapping),
++                        #[cfg(target_os = "android")]
++                        _presentation: None,
+                     });
++                    kumquat_gpu
++                        .shared_resources
++                        .insert(resource_id, Arc::downgrade(&resource));
+                     ctx.resources.insert(resource_id, resource);
+ 
+                     kumquat_gpu
+@@ -596,6 +612,16 @@ impl KumquatGpuConnection {
+                         .lock()
+                         .unwrap()
+                         .export_blob(resource_id)?;
++                    #[cfg(target_os = "android")]
++                    let (handle, registration) = match handle {
++                        rutabaga_gfx::RutabagaHandle::AhbInfo(info) => {
++                            let (handle, registration) = crate::bareboot_ahb::register(info)
++                                .map_err(MagmaGpuError::IoError)?;
++                            (handle, Some(registration))
++                        }
++                        handle => (MagmaGpuHandle::try_from(handle)?, None),
++                    };
++                    #[cfg(not(target_os = "android"))]
+                     let handle = MagmaGpuHandle::try_from(handle)?;
+                     let mut vk_info: RutabagaVulkanInfo = Default::default();
+                     if let Ok(vulkan_info) = kumquat_gpu
+@@ -611,7 +637,12 @@ impl KumquatGpuConnection {
+                         resource_id,
+                         rutabaga: kumquat_gpu.rutabaga.clone(),
+                         mapping: None,
++                        #[cfg(target_os = "android")]
++                        _presentation: registration,
+                     });
++                    kumquat_gpu
++                        .shared_resources
++                        .insert(resource_id, Arc::downgrade(&resource));
+                     ctx.resources.insert(resource_id, resource);
+ 
+                     let resp = kumquat_gpu_protocol_resp_resource_create {
+diff --git a/kumquat/server/src/main.rs b/kumquat/server/src/main.rs
+index bbbf36d..b5960a5 100644
+--- a/kumquat/server/src/main.rs
++++ b/kumquat/server/src/main.rs
+@@ -4,6 +4,8 @@
+ 
+ mod kumquat;
+ mod kumquat_gpu;
++#[cfg(target_os = "android")]
++mod bareboot_ahb;
+ 
+ use clap::Parser;
+ use kumquat::KumquatBuilder;
+@@ -12,8 +14,6 @@ use magma_gpu::util::IntoRawDescriptor;
+ use magma_gpu::util::OwnedDescriptor;
+ use magma_gpu::util::WritePipe;
+ 
+-use crate::kumquat_gpu::KumquatGpuResult;
+-
+ #[derive(Parser, Debug)]
+ #[command(version = "1.71", about = None, long_about = None)]
+ struct Args {
+@@ -42,11 +42,28 @@ struct Args {
+     /// An OS-specific pipe descriptor to the parent process
+     #[arg(long, default_value = "0")]
+     pipe_descriptor: i64,
++
++    #[cfg(target_os = "android")]
++    #[arg(long)]
++    parent_pid: Option<libc::pid_t>,
+ }
+ 
+-fn main() -> KumquatGpuResult<()> {
++fn main() -> Result<(), Box<dyn std::error::Error>> {
+     let args = Args::parse();
+ 
++    #[cfg(target_os = "android")]
++    if let Some(parent_pid) = args.parent_pid {
++        if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) } != 0 {
++            return Err(std::io::Error::last_os_error().into());
++        }
++        if unsafe { libc::getppid() } != parent_pid {
++            return Err(std::io::Error::other("Bareboot daemon exited before renderer startup").into());
++        }
++    }
++
++    #[cfg(target_os = "android")]
++    bareboot_ahb::start()?;
++
+     let mut kumquat = KumquatBuilder::new()
+         .set_capset_names(args.capset_names)
+         .set_remote_capset_names(args.remote_capset_names)

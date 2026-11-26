@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/protocol",
+    "crates/runtime",
+    "crates/daemon",
+    "crates/cli",
+    "crates/display",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+libc = "0.2"
+protocol = { path = "crates/protocol" }
+runtime = { path = "crates/runtime" }
+daemon = { path = "crates/daemon" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

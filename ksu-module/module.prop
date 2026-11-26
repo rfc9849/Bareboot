@@ -1,0 +1,6 @@
+id=bareboot
+name=Bareboot
+version=0.1.0
+versionCode=1
+author=bareboot
+description=Runs native ARM64 Linux distributions on Android

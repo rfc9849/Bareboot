@@ -1,0 +1,15 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bareboot"
+path = "src/main.rs"
+
+[dependencies]
+daemon.workspace = true
+libc.workspace = true
+protocol.workspace = true
+runtime.workspace = true

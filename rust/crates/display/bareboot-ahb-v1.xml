@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="bareboot_ahb_v1">
+  <interface name="bareboot_ahb_v1" version="1">
+    <enum name="error">
+      <entry name="invalid_buffer" value="0"/>
+      <entry name="invalid_fence" value="1"/>
+    </enum>
+    <request name="destroy" type="destructor"/>
+    <request name="create_buffer">
+      <arg name="id" type="new_id" interface="wl_buffer"/>
+      <arg name="token" type="fd"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
+    <request name="set_acquire_fence">
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="fence" type="fd"/>
+    </request>
+  </interface>
+</protocol>

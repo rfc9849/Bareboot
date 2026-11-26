@@ -1,0 +1,237 @@
+type bareboot_gpu_renderer domain
+enforce bareboot_gpu_renderer
+type bareboot_gpu_exec file_type
+typeattribute bareboot_gpu_exec exec_type
+type bareboot_gpu_guest file_type
+type bareboot_gpu_socket file_type
+type bareboot_gpu_mem file_type
+
+allow bareboot_gpu_socket tmpfs filesystem associate
+allow bareboot_gpu_mem tmpfs filesystem associate
+allow bareboot_gpu_exec labeledfs filesystem associate
+allow bareboot_gpu_guest labeledfs filesystem associate
+
+allow bareboot_daemon bareboot_gpu_renderer process { transition signal sigkill signull rlimitinh siginh }
+allow bareboot_daemon bareboot_gpu_renderer process2 nosuid_transition
+allow bareboot_gpu_renderer bareboot_daemon process sigchld
+allow bareboot_daemon bareboot_gpu_exec file { getattr open read execute map }
+allow bareboot_gpu_renderer bareboot_gpu_exec file { entrypoint getattr open read execute map }
+allow bareboot_daemon bareboot_gpu_guest dir { getattr open read search }
+allow bareboot_daemon bareboot_gpu_guest file getattr
+allow bareboot_daemon bareboot_gpu_socket dir { getattr search setattr mounton rmdir relabelto remove_name write }
+allow bareboot_daemon bareboot_gpu_socket sock_file { getattr unlink }
+allow bareboot_daemon socket_device dir { relabelfrom write remove_name }
+type_transition bareboot_gpu_renderer bareboot_gpu_socket sock_file bareboot_gpu_socket
+allow bareboot_gpu_renderer bareboot_gpu_socket dir { getattr search write add_name remove_name }
+allow bareboot_gpu_renderer bareboot_gpu_socket sock_file { create getattr unlink }
+allow bareboot_guest bareboot_gpu_socket dir { getattr search }
+allow bareboot_guest bareboot_gpu_socket sock_file { getattr write }
+allow bareboot_guest bareboot_gpu_renderer unix_stream_socket connectto
+allow bareboot_guest bareboot_gpu_renderer fd use
+allow bareboot_gpu_renderer bareboot_guest fd use
+allow bareboot_guest bareboot_gpu_guest dir { getattr open read search }
+allow bareboot_guest bareboot_gpu_guest file { getattr open read execute execute_no_trans map }
+
+allow bareboot_gpu_renderer bareboot_gpu_renderer process { fork getsched setsched }
+allow bareboot_gpu_renderer bareboot_gpu_renderer fd use
+allow bareboot_gpu_renderer bareboot_gpu_renderer unix_stream_socket { create bind listen accept read write getattr getopt setopt shutdown }
+allow bareboot_gpu_renderer bareboot_gpu_renderer unix_dgram_socket { create connect read write getattr getopt setopt }
+allow bareboot_gpu_renderer bareboot_gpu_renderer fifo_file { read write getattr ioctl }
+allow bareboot_gpu_renderer bareboot_gpu_renderer file { create getattr open read write map setattr lock ioctl }
+allow bareboot_gpu_renderer adb_data_file dir { getattr search }
+allow bareboot_gpu_renderer system_data_root_file dir { getattr search }
+allow bareboot_gpu_renderer system_data_file dir { getattr search }
+allow bareboot_gpu_renderer system_file dir { getattr open read search }
+allow bareboot_gpu_renderer system_file file { getattr open read execute map }
+allow bareboot_gpu_renderer system_file lnk_file { getattr read }
+allow bareboot_gpu_renderer system_linker_exec file { getattr open read execute map }
+allow bareboot_gpu_renderer linkerconfig_file dir search
+allow bareboot_gpu_renderer linkerconfig_file file { getattr open read map }
+allow bareboot_gpu_renderer vendor_file dir { getattr open read search }
+allow bareboot_gpu_renderer vendor_file lnk_file { getattr read }
+allow bareboot_gpu_renderer vendor_file file { getattr open read map execute }
+allow bareboot_gpu_renderer same_process_hal_file dir { getattr open read search }
+allow bareboot_gpu_renderer same_process_hal_file file { getattr open read map execute }
+allow bareboot_gpu_renderer same_process_hal_file lnk_file { getattr read }
+allow bareboot_gpu_renderer rootfs dir search
+allow bareboot_gpu_renderer rootfs lnk_file read
+allow bareboot_gpu_renderer device dir { getattr open read search }
+allow bareboot_gpu_renderer sysfs dir { getattr open read search }
+allow bareboot_gpu_renderer sysfs file { getattr open read }
+allow bareboot_gpu_renderer sysfs lnk_file { getattr read }
+allow bareboot_gpu_renderer proc dir { getattr open read search }
+allow bareboot_gpu_renderer proc file { getattr open read }
+allow bareboot_gpu_renderer proc lnk_file { getattr read }
+allow bareboot_gpu_renderer proc_type file { getattr open read }
+allow bareboot_gpu_renderer property_socket dir search
+allow bareboot_gpu_renderer properties_device dir search
+allow bareboot_gpu_renderer properties_serial file { getattr open read map }
+allow bareboot_gpu_renderer property_info file { getattr open read map }
+allow bareboot_gpu_renderer build_prop file { getattr open read map }
+allow bareboot_gpu_renderer debug_prop file { getattr open read map }
+allow bareboot_gpu_renderer exported_default_prop file { getattr open read map }
+allow bareboot_gpu_renderer graphics_config_prop file { getattr open read map }
+allow bareboot_gpu_renderer servicemanager_prop file { getattr open read map }
+allow bareboot_gpu_renderer soc_prop file { getattr open read map }
+allow bareboot_gpu_renderer vndk_prop file { getattr open read map }
+allow bareboot_gpu_renderer vendor_pixel_gralloc_prop file { getattr open read map }
+allow bareboot_gpu_renderer zygote_config_egl_prop file { getattr open read map }
+allow bareboot_gpu_renderer null_device chr_file { getattr open read write }
+allow bareboot_gpu_renderer socket_device dir search
+allow bareboot_gpu_renderer logdw_socket sock_file write
+allow bareboot_gpu_renderer logd unix_dgram_socket sendto
+allow bareboot_gpu_renderer gpu_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_gpu_renderer gpu_device chr_file ioctl { 0x0000-0xffff }
+allow bareboot_gpu_renderer dmabuf_system_heap_device chr_file { getattr open read ioctl }
+allowxperm bareboot_gpu_renderer dmabuf_system_heap_device chr_file ioctl { 0x4800 }
+allow bareboot_gpu_renderer udmabuf_device chr_file { getattr open read }
+allow bareboot_gpu_renderer binder_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_gpu_renderer binder_device chr_file ioctl { 0x6200-0x62ff }
+allow bareboot_gpu_renderer servicemanager binder { call transfer }
+allow bareboot_gpu_renderer hal_graphics_allocator_service service_manager find
+allow bareboot_gpu_renderer hal_graphics_allocator_server binder { call transfer }
+allow hal_graphics_allocator_server bareboot_gpu_renderer binder transfer
+allow bareboot_gpu_renderer hal_graphics_allocator_server fd use
+allow bareboot_guest hal_graphics_allocator_server fd use
+allow bareboot_gpu_renderer bareboot_daemon fd use
+allow bareboot_gpu_renderer bareboot_daemon fifo_file { getattr write }
+allow bareboot_gpu_renderer apex_mnt_dir dir search
+allow bareboot_gpu_renderer dmabuf_heap_device dir search
+allow bareboot_gpu_renderer bareboot_gpu_renderer dir { search getattr }
+allow bareboot_gpu_renderer bareboot_gpu_renderer lnk_file { getattr read }
+allow servicemanager bareboot_gpu_renderer binder transfer
+allow servicemanager bareboot_gpu_renderer dir search
+allow servicemanager bareboot_gpu_renderer file { getattr open read }
+allow servicemanager bareboot_gpu_renderer process getattr
+allow bareboot_gpu_renderer hal_graphics_mapper_service service_manager find
+type_transition bareboot_gpu_renderer tmpfs file bareboot_gpu_mem
+allow bareboot_gpu_renderer bareboot_gpu_mem file { create getattr open read write map setattr lock ioctl }
+allow bareboot_guest bareboot_gpu_mem file { getattr read write map ioctl }
+
+allow bareboot_gpu_renderer bareboot_daemon unix_stream_socket { read write getattr }
+allow bareboot_display bareboot_gpu_renderer fd use
+allow bareboot_display hal_graphics_allocator_server fd use
+allow bareboot_display bareboot_gpu_mem file { getattr read write }
+
+type bareboot_media domain
+enforce bareboot_media
+typeattribute bareboot_media mlstrustedsubject
+
+allow bareboot_daemon bareboot_media process { transition signal sigkill signull rlimitinh siginh }
+allow bareboot_daemon bareboot_media process2 nosuid_transition
+allow bareboot_media bareboot_daemon process sigchld
+allow bareboot_media bareboot_gpu_exec file { entrypoint getattr open read execute map }
+type_transition bareboot_media bareboot_gpu_socket sock_file bareboot_gpu_socket
+allow bareboot_media bareboot_gpu_socket dir { getattr search write add_name remove_name }
+allow bareboot_media bareboot_gpu_socket sock_file { create getattr unlink setattr }
+allow bareboot_guest bareboot_media unix_stream_socket connectto
+allow bareboot_guest bareboot_media fd use
+allow bareboot_media bareboot_guest fd use
+allow bareboot_media bareboot_daemon fd use
+allow bareboot_media bareboot_daemon unix_stream_socket { read write getattr }
+allow bareboot_media bareboot_gpu_renderer fd use
+allow bareboot_gpu_renderer bareboot_media fd use
+allow bareboot_media bareboot_gpu_renderer unix_stream_socket { read write getattr }
+type_transition bareboot_media tmpfs file bareboot_gpu_mem
+allow bareboot_media bareboot_gpu_mem file { create getattr open read write map setattr unlink }
+allow bareboot_gpu_renderer bareboot_media unix_stream_socket { read write getattr }
+allow bareboot_display bareboot_media fd use
+allow bareboot_display hal_codec2_server fd use
+
+allow bareboot_media bareboot_media process { fork getsched setsched signal }
+allow bareboot_media bareboot_media fd use
+allow bareboot_media bareboot_media unix_stream_socket { create bind listen accept read write getattr getopt setopt shutdown }
+allow bareboot_media bareboot_media unix_dgram_socket { create connect read write getattr getopt setopt }
+allow bareboot_media bareboot_media fifo_file { read write getattr ioctl }
+allow bareboot_media bareboot_media file { create getattr open read write map setattr lock ioctl }
+allow bareboot_media bareboot_media dir { search getattr }
+allow bareboot_media bareboot_media lnk_file { getattr read }
+allow bareboot_media adb_data_file dir search
+allow bareboot_media system_data_root_file dir search
+allow bareboot_media system_data_file dir search
+allow bareboot_media system_file dir { getattr open read search }
+allow bareboot_media system_file file { getattr open read execute map }
+allow bareboot_media system_file lnk_file { getattr read }
+allow bareboot_media system_linker_exec file { getattr open read execute map }
+allow bareboot_media linkerconfig_file dir search
+allow bareboot_media linkerconfig_file file { getattr open read map }
+allow bareboot_media vendor_file dir { getattr open read search }
+allow bareboot_media vendor_file lnk_file { getattr read }
+allow bareboot_media vendor_file file { getattr open read map execute }
+allow bareboot_media same_process_hal_file dir { getattr open read search }
+allow bareboot_media same_process_hal_file file { getattr open read map execute }
+allow bareboot_media same_process_hal_file lnk_file { getattr read }
+allow bareboot_media apex_mnt_dir dir search
+allow bareboot_media rootfs dir search
+allow bareboot_media rootfs lnk_file read
+allow bareboot_media device dir { getattr open read search }
+allow bareboot_media sysfs dir { getattr open read search }
+allow bareboot_media sysfs file { getattr open read }
+allow bareboot_media proc dir { getattr open read search }
+allow bareboot_media proc file { getattr open read }
+allow bareboot_media proc_type file { getattr open read }
+allow bareboot_media null_device chr_file { getattr open read write }
+allow bareboot_media socket_device dir search
+allow bareboot_media logdw_socket sock_file write
+allow bareboot_media logd unix_dgram_socket sendto
+allow bareboot_media property_socket dir search
+allow bareboot_media properties_device dir search
+allow bareboot_media properties_serial file { getattr open read map }
+allow bareboot_media property_info file { getattr open read map }
+allow bareboot_media build_prop file { getattr open read map }
+allow bareboot_media debug_prop file { getattr open read map }
+allow bareboot_media exported_default_prop file { getattr open read map }
+allow bareboot_media default_prop file { getattr open read map }
+allow bareboot_media boot_status_prop file { getattr open read map }
+allow bareboot_media servicemanager_prop file { getattr open read map }
+allow bareboot_media hwservicemanager_prop file { getattr open read map }
+allow bareboot_media codec2_config_prop file { getattr open read map }
+allow bareboot_media media_prop file { getattr open read map }
+allow bareboot_media soc_prop file { getattr open read map }
+allow bareboot_media vndk_prop file { getattr open read map }
+allow bareboot_media vendor_pixel_gralloc_prop file { getattr open read map }
+allow bareboot_media graphics_config_prop file { getattr open read map }
+allow bareboot_media zygote_config_egl_prop file { getattr open read map }
+allow bareboot_media gpu_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_media gpu_device chr_file ioctl { 0x0000-0xffff }
+allow bareboot_media bareboot_display fd use
+allow bareboot_media bareboot_display unix_stream_socket { read write getattr }
+allow bareboot_display bareboot_media unix_stream_socket { read write getattr }
+allow bareboot_media sysfs lnk_file { getattr read }
+allow bareboot_media proc lnk_file { getattr read }
+allow bareboot_media dmabuf_heap_device dir search
+allow bareboot_media dmabuf_system_heap_device chr_file { getattr open read ioctl }
+allowxperm bareboot_media dmabuf_system_heap_device chr_file ioctl { 0x4800 }
+allow bareboot_media binder_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_media binder_device chr_file ioctl { 0x6200-0x62ff }
+allow bareboot_media hwbinder_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_media hwbinder_device chr_file ioctl { 0x6200-0x62ff }
+allow bareboot_media servicemanager binder { call transfer }
+allow servicemanager bareboot_media binder transfer
+allow servicemanager bareboot_media dir search
+allow servicemanager bareboot_media file { getattr open read }
+allow servicemanager bareboot_media process getattr
+allow bareboot_media hwservicemanager binder { call transfer }
+allow hwservicemanager bareboot_media binder transfer
+allow hwservicemanager bareboot_media dir search
+allow hwservicemanager bareboot_media file { getattr open read }
+allow hwservicemanager bareboot_media process getattr
+allow bareboot_media hal_graphics_allocator_service service_manager find
+allow bareboot_media hal_graphics_allocator_server binder { call transfer }
+allow hal_graphics_allocator_server bareboot_media binder transfer
+allow bareboot_media hal_graphics_allocator_server fd use
+allow bareboot_media hal_graphics_mapper_service service_manager find
+allow bareboot_media hal_codec2_service service_manager find
+allow bareboot_media hal_codec2_hwservice hwservice_manager find
+allow bareboot_media hal_codec2_server binder { call transfer }
+allow hal_codec2_server bareboot_media binder { call transfer }
+allow bareboot_media hal_codec2_server fd use
+allow hal_codec2_server bareboot_media fd use
+allow bareboot_media mediaserver_service service_manager find
+allow bareboot_media mediaserver binder { call transfer }
+allow mediaserver bareboot_media binder { call transfer }
+allow bareboot_media mediaserver fd use
+allow mediaserver bareboot_media fd use
+allow bareboot_media mediametrics_service service_manager find
+allow bareboot_media mediametrics binder { call transfer }
+allow mediametrics bareboot_media binder transfer
