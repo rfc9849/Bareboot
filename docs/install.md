@@ -1,6 +1,6 @@
 # Install
 
-You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, Linux 6.5+ (`adb shell uname -r`), and SELinux Enforcing.
+You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, Linux 6.1+ (`adb shell uname -r`), and SELinux Enforcing.
 
 1. Install `bareboot-module.zip` from **Modules** in your root manager. Magisk and older KernelSU need a reboot.
 2. Install the APK and open Bareboot.

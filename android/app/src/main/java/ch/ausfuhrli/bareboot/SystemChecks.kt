@@ -70,7 +70,7 @@ object SystemChecks {
         val release = System.getProperty("os.version").orEmpty()
         val version = Regex("^(\\d+)\\.(\\d+)").find(release)?.destructured
             ?.let { (major, minor) -> major.toInt() to minor.toInt() }
-        val kernelOk = version?.let { (major, minor) -> major > 6 || (major == 6 && minor >= 5) }
+        val kernelOk = version?.let { (major, minor) -> major > 6 || (major == 6 && minor >= 1) }
         val pageSize = Os.sysconf(OsConstants._SC_PAGESIZE)
         val kib = (pageSize / 1024).toInt()
         return listOf(

@@ -34,7 +34,7 @@ impl PeerPolicy {
         if cred.pid <= 0 {
             return None;
         }
-        let peer = peer_pidfd(fd)?;
+        let peer = peer_pidfd(fd, cred.pid)?;
         if !process_alive(&peer) {
             return None;
         }
@@ -75,7 +75,17 @@ fn peer_credentials(fd: RawFd) -> Option<libc::ucred> {
     (rc == 0 && len as usize == size_of::<libc::ucred>()).then_some(cred)
 }
 
-fn peer_pidfd(fd: RawFd) -> Option<OwnedFd> {
+fn peer_pidfd(fd: RawFd, pid: libc::pid_t) -> Option<OwnedFd> {
+    match socket_peer_pidfd(fd) {
+        Ok(peer) => peer,
+        // SO_PEERPIDFD arrived in Linux 6.5. Older kernels (GKI android14-6.1)
+        // answer ENOPROTOOPT; fall back to pidfd_open on the SO_PEERCRED pid.
+        Err(e) if e.raw_os_error() == Some(libc::ENOPROTOOPT) => opened_peer_pidfd(fd, pid),
+        Err(_) => None,
+    }
+}
+
+fn socket_peer_pidfd(fd: RawFd) -> io::Result<Option<OwnedFd>> {
     let mut peer: RawFd = -1;
     let mut len = size_of::<RawFd>() as libc::socklen_t;
     let rc = unsafe {
@@ -87,11 +97,34 @@ fn peer_pidfd(fd: RawFd) -> Option<OwnedFd> {
             &mut len,
         )
     };
-    if rc != 0 || peer < 0 {
-        return None;
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if peer < 0 {
+        return Ok(None);
     }
     let owned = unsafe { OwnedFd::from_raw_fd(peer) };
-    (len as usize == size_of::<RawFd>()).then_some(owned)
+    Ok((len as usize == size_of::<RawFd>()).then_some(owned))
+}
+
+/// pidfd_open on the pid from SO_PEERCRED can race with PID reuse: the peer may
+/// have exited and its PID gone to another process. Accept the pidfd only while
+/// the connection is still open, so the peer (or a process it handed the socket
+/// to) is still alive after the pidfd was taken.
+fn opened_peer_pidfd(fd: RawFd, pid: libc::pid_t) -> Option<OwnedFd> {
+    let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
+    if raw < 0 {
+        return None;
+    }
+    let owned = unsafe { OwnedFd::from_raw_fd(raw as RawFd) };
+    let mut pfd = libc::pollfd {
+        fd,
+        events: libc::POLLRDHUP,
+        revents: 0,
+    };
+    let rc = unsafe { libc::poll(&mut pfd, 1, 0) };
+    let hung_up = pfd.revents & (libc::POLLHUP | libc::POLLRDHUP | libc::POLLERR | libc::POLLNVAL) != 0;
+    (rc >= 0 && !hung_up).then_some(owned)
 }
 
 fn process_alive(peer: &OwnedFd) -> bool {
