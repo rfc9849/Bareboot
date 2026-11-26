@@ -99,7 +99,7 @@
     <string name="image_boot_init_running">Runs the distribution\'s init, such as systemd or OpenRC, as process 1 with more privileges. Applies at the next start.</string>
     <string name="image_boot_init_desc">Runs the distribution\'s init, such as systemd or OpenRC, as process 1 with more privileges. Only for software you trust.</string>
     <string name="image_isolated_net">Isolated network</string>
-    <string name="image_gpu">Experimental GPU</string>
+    <string name="image_gpu">GPU acceleration</string>
     <string name="image_gpu_desc">Start Vulkan and OpenGL apps with the GPU launcher inside the distro.</string>
     <string name="image_gpu_start_command">Run /run/bareboot-gpu/guest/bin/bareboot-gpu check in the distro.</string>
     <string name="image_gpu_failed">The GPU renderer is not running. See the daemon log.</string>

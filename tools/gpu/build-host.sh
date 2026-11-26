@@ -4,12 +4,15 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOLS="$ROOT/tools/gpu"
 BUILD="$ROOT/dist/.gpu-host"
 OUT="$ROOT/dist/gpu/host"
-: "${ANDROID_NDK_HOME:?Set ANDROID_NDK_HOME to the Android NDK directory}"
+: "${ANDROID_NDK_HOME:?Install the Android NDK and set ANDROID_NDK_HOME to its directory, or use BAREBOOT_GPU=0 to build without the GPU bundle.}"
 TAG="$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64"
 NDK="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$TAG/bin"
 CC="$NDK/aarch64-linux-android30-clang"
 CXX="$NDK/aarch64-linux-android30-clang++"
-test -x "$CC"
+if [[ ! -x "$CC" || ! -x "$CXX" || ! -x "$NDK/llvm-ar" || ! -x "$NDK/llvm-strip" ]]; then
+    echo "Android NDK tools are missing under $NDK. Set ANDROID_NDK_HOME to an NDK installed for this host, or use BAREBOOT_GPU=0 to build without the GPU bundle." >&2
+    exit 1
+fi
 mkdir -p "$BUILD" "$OUT"
 
 source_tree() {

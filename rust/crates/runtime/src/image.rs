@@ -53,6 +53,10 @@ pub struct ImageSettings {
 
 pub fn image_settings(distro_dir: &Path) -> ImageSettings {
     let init = read_meta(distro_dir, INIT_FILE);
+    let gpu_enabled = match fs::read_to_string(distro_dir.join(GPU_FILE)) {
+        Ok(value) => value.trim() == "1",
+        Err(e) => e.kind() == io::ErrorKind::NotFound,
+    };
     let ssh_port = read_meta(distro_dir, SSH_PORT_FILE)
         .parse::<u16>()
         .ok()
@@ -65,7 +69,7 @@ pub fn image_settings(distro_dir: &Path) -> ImageSettings {
         .unwrap_or_default();
     ImageSettings {
         keep_awake: read_meta(distro_dir, KEEP_AWAKE_FILE) == "1",
-        gpu_enabled: read_meta(distro_dir, GPU_FILE) == "1",
+        gpu_enabled,
         init: if init == INIT_SYSTEM { init } else { INIT_NONE.to_string() },
         isolated_net: read_meta(distro_dir, ISOLATED_NET_FILE) == "1",
         ssh_port,

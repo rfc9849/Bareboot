@@ -99,7 +99,7 @@
     <string name="image_boot_init_running">Запускает init дистрибутива, например systemd или OpenRC, как PID 1 с расширенными правами. Применится при следующем запуске.</string>
     <string name="image_boot_init_desc">Запускает init дистрибутива, например systemd или OpenRC, как PID 1 с расширенными правами. Только для доверенного ПО.</string>
     <string name="image_isolated_net">Изолированная сеть</string>
-    <string name="image_gpu">Экспериментальное ускорение GPU</string>
+    <string name="image_gpu">Ускорение GPU</string>
     <string name="image_gpu_desc">Запускайте приложения Vulkan и OpenGL через команду bareboot-gpu в дистрибутиве.</string>
     <string name="image_gpu_start_command">Выполните /run/bareboot-gpu/guest/bin/bareboot-gpu check в дистрибутиве.</string>
     <string name="image_gpu_failed">Рендерер GPU не запущен. См. журнал службы.</string>

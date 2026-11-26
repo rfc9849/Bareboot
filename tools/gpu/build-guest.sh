@@ -5,9 +5,17 @@ BUILD="$ROOT/dist/.gpu-guest"
 OUT="$ROOT/dist/gpu/guest"
 SRC="$BUILD/mesa"
 REV=e175081251f7d61f6c7790db08d7c3e6f6e77ae3
-case "$(docker info --format '{{.Architecture}}')" in
+if ! command -v docker >/dev/null; then
+    echo "Install Docker and start an ARM64 Docker engine, or use BAREBOOT_GPU=0 to build without the GPU bundle." >&2
+    exit 1
+fi
+if ! arch="$(docker info --format '{{.Architecture}}')"; then
+    echo "Start the Docker engine or select a working ARM64 Docker context, or use BAREBOOT_GPU=0 to build without the GPU bundle." >&2
+    exit 1
+fi
+case "$arch" in
     aarch64|arm64) ;;
-    *) echo "The GPU guest build needs an ARM64 Docker engine." >&2; exit 1 ;;
+    *) echo "The Docker engine reports $arch. Select an ARM64 Docker engine, or use BAREBOOT_GPU=0 to build without the GPU bundle." >&2; exit 1 ;;
 esac
 mkdir -p "$BUILD" "$OUT"
 if [[ ! -d "$SRC/.git" ]]; then

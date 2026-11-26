@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 DIST="$ROOT/dist"
+GPU="${BAREBOOT_GPU:-1}"
 GRADLE_BIN="${GRADLE_BIN:-$(command -v gradle || find "$HOME/.gradle/wrapper/dists" -path "*/bin/gradle" -type f 2>/dev/null | sort | tail -1)}"
 
 mkdir -p "$DIST"
@@ -18,8 +19,8 @@ echo "==> Building static aarch64-unknown-linux-musl bareboot"
 BIN="$ROOT/rust/target/aarch64-unknown-linux-musl/release/bareboot"
 cp "$BIN" "$DIST/bareboot-aarch64-musl"
 
-if [[ "${BAREBOOT_GPU:-0}" == 1 ]]; then
-    echo "==> Building the experimental GPU bundle"
+if [[ "$GPU" != 0 ]]; then
+    echo "==> Building the GPU bundle"
     bash "$ROOT/tools/gpu/build-host.sh"
     bash "$ROOT/tools/gpu/build-guest.sh"
 fi
@@ -63,7 +64,7 @@ fi
 58db3cfabf8ec806bc060e54ab5466a31de4a3ae80fe4a8aa02fb6b1c053c93f  COPYING
 SUMS
 )
-if [[ "${BAREBOOT_GPU:-0}" == 1 ]]; then
+if [[ "$GPU" != 0 ]]; then
     mkdir -p "$STAGE/gpu/guest"
     cp -R "$DIST/gpu/host" "$STAGE/gpu/"
     for part in bin glibc musl licenses; do
