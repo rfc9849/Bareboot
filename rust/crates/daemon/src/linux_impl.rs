@@ -579,7 +579,7 @@ impl DaemonState {
             Request::ListImages => {
                 let mut images = list_images(&self.distros_dir());
                 let busy = self.busy.lock().map(|b| b.clone()).unwrap_or_default();
-                let gpu_available = gpu::heap_present() && gpu::bundle().is_some();
+                let gpu_available = gpu::memory_available() && gpu::bundle().is_some();
                 for image in &mut images {
                     image.gpu_available = gpu_available;
                     image.gpu_running = self.distros.get(&image.name).is_some_and(|d| d.renderer.is_some());
@@ -640,8 +640,8 @@ impl DaemonState {
                 if self.distros.contains_key(&name) || self.is_busy(&name).is_some() {
                     return (err_resp(libc::EBUSY as u32, "stop the distro before changing GPU settings".into()), None);
                 }
-                if enabled && (!gpu::heap_present() || gpu::bundle().is_none()) {
-                    return (err_resp(libc::ENOTSUP as u32, "GPU module bundle or system-uncached DMA heap is missing".into()), None);
+                if enabled && (!gpu::memory_available() || gpu::bundle().is_none()) {
+                    return (err_resp(libc::ENOTSUP as u32, "GPU module bundle or system DMA heap is missing".into()), None);
                 }
                 match configure_gpu(&self.distros_dir().join(&name), enabled) {
                     Ok(()) => (Response::Ok, None),

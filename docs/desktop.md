@@ -28,3 +28,4 @@ Check the GPU with `/run/bareboot-gpu/guest/bin/bareboot-gpu check`.
 - Pointer is always an arrow
 - US keyboard layout only
 - Linux and Windows clients are untested
+- On Adreno drivers without dma-buf import, the renderer exports host-visible Vulkan memory through Android hardware buffers. OpenGL through Zink requires `VK_KHR_maintenance5`.

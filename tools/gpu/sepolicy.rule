@@ -75,6 +75,7 @@ allow bareboot_gpu_renderer servicemanager_prop file { getattr open read map }
 allow bareboot_gpu_renderer soc_prop file { getattr open read map }
 allow bareboot_gpu_renderer vndk_prop file { getattr open read map }
 allow bareboot_gpu_renderer vendor_pixel_gralloc_prop file { getattr open read map }
+allow bareboot_gpu_renderer vendor_gralloc_prop file { getattr open read map }
 allow bareboot_gpu_renderer zygote_config_egl_prop file { getattr open read map }
 allow bareboot_gpu_renderer null_device chr_file { getattr open read write }
 allow bareboot_gpu_renderer socket_device dir search
@@ -104,6 +105,22 @@ allow servicemanager bareboot_gpu_renderer dir search
 allow servicemanager bareboot_gpu_renderer file { getattr open read }
 allow servicemanager bareboot_gpu_renderer process getattr
 allow bareboot_gpu_renderer hal_graphics_mapper_service service_manager find
+allow bareboot_gpu_renderer hwbinder_device chr_file { getattr open read write ioctl map }
+allowxperm bareboot_gpu_renderer hwbinder_device chr_file ioctl { 0x6200-0x62ff }
+allow bareboot_gpu_renderer hwservicemanager binder { call transfer }
+allow hwservicemanager bareboot_gpu_renderer binder transfer
+allow hwservicemanager bareboot_gpu_renderer dir search
+allow hwservicemanager bareboot_gpu_renderer file { getattr open read }
+allow hwservicemanager bareboot_gpu_renderer process getattr
+allow bareboot_gpu_renderer hwservicemanager_prop file { getattr open read map }
+allow bareboot_gpu_renderer hal_graphics_mapper_hwservice hwservice_manager find
+allow bareboot_gpu_renderer hidl_manager_hwservice hwservice_manager find
+allow bareboot_gpu_renderer default_prop file { getattr open read map }
+allow bareboot_gpu_renderer zygote_config_prop file { getattr open read map }
+allow bareboot_gpu_renderer vendor_sysfs_kgsl dir { getattr open read search }
+allow bareboot_gpu_renderer vendor_sysfs_kgsl file { getattr open read }
+allow bareboot_gpu_renderer vendor_sysfs_kgsl_gpu_model file { getattr open read }
+allow bareboot_gpu_renderer unlabeled filesystem getattr
 type_transition bareboot_gpu_renderer tmpfs file bareboot_gpu_mem
 allow bareboot_gpu_renderer bareboot_gpu_mem file { create getattr open read write map setattr lock ioctl }
 allow bareboot_guest bareboot_gpu_mem file { getattr read write map ioctl }
@@ -129,7 +146,7 @@ allow bareboot_guest bareboot_media unix_stream_socket connectto
 allow bareboot_guest bareboot_media fd use
 allow bareboot_media bareboot_guest fd use
 allow bareboot_media bareboot_daemon fd use
-allow bareboot_media bareboot_daemon unix_stream_socket { read write getattr }
+allow bareboot_media bareboot_daemon unix_stream_socket { read write getattr setopt }
 allow bareboot_media bareboot_gpu_renderer fd use
 allow bareboot_gpu_renderer bareboot_media fd use
 allow bareboot_media bareboot_gpu_renderer unix_stream_socket { read write getattr }
@@ -139,7 +156,7 @@ allow bareboot_gpu_renderer bareboot_media unix_stream_socket { read write getat
 allow bareboot_display bareboot_media fd use
 allow bareboot_display hal_codec2_server fd use
 
-allow bareboot_media bareboot_media process { fork getsched setsched signal }
+allow bareboot_media bareboot_media process { fork getcap getsched setsched signal }
 allow bareboot_media bareboot_media fd use
 allow bareboot_media bareboot_media unix_stream_socket { create bind listen accept read write getattr getopt setopt shutdown }
 allow bareboot_media bareboot_media unix_dgram_socket { create connect read write getattr getopt setopt }
@@ -191,6 +208,7 @@ allow bareboot_media media_prop file { getattr open read map }
 allow bareboot_media soc_prop file { getattr open read map }
 allow bareboot_media vndk_prop file { getattr open read map }
 allow bareboot_media vendor_pixel_gralloc_prop file { getattr open read map }
+allow bareboot_media vendor_gralloc_prop file { getattr open read map }
 allow bareboot_media graphics_config_prop file { getattr open read map }
 allow bareboot_media zygote_config_egl_prop file { getattr open read map }
 allow bareboot_media gpu_device chr_file { getattr open read write ioctl map }
@@ -222,6 +240,13 @@ allow bareboot_media hal_graphics_allocator_server binder { call transfer }
 allow hal_graphics_allocator_server bareboot_media binder transfer
 allow bareboot_media hal_graphics_allocator_server fd use
 allow bareboot_media hal_graphics_mapper_service service_manager find
+allow bareboot_media hal_graphics_mapper_hwservice hwservice_manager find
+allow bareboot_media hidl_manager_hwservice hwservice_manager find
+allow bareboot_media graphics_config_writable_prop file { getattr open read map }
+allow bareboot_media zygote_config_prop file { getattr open read map }
+allow bareboot_media vendor_sysfs_kgsl dir { getattr open read search }
+allow bareboot_media vendor_sysfs_kgsl file { getattr open read }
+allow bareboot_media vendor_sysfs_kgsl_gpu_model file { getattr open read }
 allow bareboot_media hal_codec2_service service_manager find
 allow bareboot_media hal_codec2_hwservice hwservice_manager find
 allow bareboot_media hal_codec2_server binder { call transfer }

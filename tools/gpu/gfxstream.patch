@@ -54,7 +54,7 @@ index fe6a556..5192442 100644
  
  lib_host_native_window = static_library(
 diff --git a/host/virtio_gpu_frontend.cpp b/host/virtio_gpu_frontend.cpp
-index 69d5b3a..c6e7f6b 100644
+index 69d5b3a..4a48a49 100644
 --- a/host/virtio_gpu_frontend.cpp
 +++ b/host/virtio_gpu_frontend.cpp
 @@ -630,11 +630,15 @@ void VirtioGpuFrontend::fillCaps(uint32_t set, void* caps) {
@@ -87,7 +87,7 @@ index 726438b..9ffe59b 100644
  
  static std::optional<struct ResourceFormatInfo> VirglFormatInfo(uint32_t virglFormat) {
 diff --git a/host/vulkan/vk_common_operations.cpp b/host/vulkan/vk_common_operations.cpp
-index acbd330..8298d9f 100644
+index acbd330..6d7744f 100644
 --- a/host/vulkan/vk_common_operations.cpp
 +++ b/host/vulkan/vk_common_operations.cpp
 @@ -1318,6 +1318,13 @@ std::unique_ptr<VkEmulation> VkEmulation::create(VulkanDispatch* gvk,
@@ -173,19 +173,125 @@ index efd2535..34f7f60 100644
                      m_state->on_DeviceLost();
                  vkStream->unsetHandleMapping();
 diff --git a/host/vulkan/vk_decoder_global_state.cpp b/host/vulkan/vk_decoder_global_state.cpp
-index e07c1ca..1132bdd 100644
+index e07c1ca..ca80857 100644
 --- a/host/vulkan/vk_decoder_global_state.cpp
 +++ b/host/vulkan/vk_decoder_global_state.cpp
-@@ -19,6 +19,8 @@
+@@ -19,6 +19,11 @@
  
  #ifdef __ANDROID__
  #include <android/hardware_buffer.h>
 +#include <linux/dma-buf.h>
++#include <linux/magic.h>
 +#include <sys/ioctl.h>
++#include <sys/socket.h>
++#include <sys/vfs.h>
  #endif
  
  #ifdef __APPLE__
-@@ -4765,6 +4767,13 @@ class VkDecoderGlobalState::Impl {
+@@ -92,6 +97,91 @@ namespace gfxstream {
+ namespace host {
+ namespace vk {
+
++#ifdef __ANDROID__
++static int dupAhbDmaBuf(AHardwareBuffer* ahb, VkDeviceSize size) {
++    int pair[2];
++    if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair) != 0) {
++        return -1;
++    }
++    int result = -1;
++    bool ambiguous = false;
++    if (AHardwareBuffer_sendHandleToUnixSocket(ahb, pair[0]) == 0) {
++        char data[4096];
++        alignas(struct cmsghdr) char control[CMSG_SPACE(sizeof(int) * 64)];
++        struct iovec iov = {data, sizeof(data)};
++        struct msghdr msg = {};
++        msg.msg_iov = &iov;
++        msg.msg_iovlen = 1;
++        msg.msg_control = control;
++        msg.msg_controllen = sizeof(control);
++        if (recvmsg(pair[1], &msg, MSG_CMSG_CLOEXEC) >= 0) {
++            const bool truncated = msg.msg_flags & (MSG_TRUNC | MSG_CTRUNC);
++            for (struct cmsghdr* c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
++                if (c->cmsg_level != SOL_SOCKET || c->cmsg_type != SCM_RIGHTS ||
++                    c->cmsg_len < CMSG_LEN(0)) {
++                    continue;
++                }
++                const size_t count = (c->cmsg_len - CMSG_LEN(0)) / sizeof(int);
++                for (size_t i = 0; i < count; ++i) {
++                    int fd;
++                    memcpy(&fd, CMSG_DATA(c) + i * sizeof(int), sizeof(int));
++                    struct statfs fs;
++                    if (!truncated && fstatfs(fd, &fs) == 0 && fs.f_type == DMA_BUF_MAGIC) {
++                        const off_t bytes = lseek(fd, 0, SEEK_END);
++                        if (bytes >= 0 && static_cast<VkDeviceSize>(bytes) >= size &&
++                            lseek(fd, 0, SEEK_SET) == 0) {
++                            if (result < 0) {
++                                result = fd;
++                                continue;
++                            }
++                            ambiguous = true;
++                        }
++                    }
++                    ::close(fd);
++                }
++            }
++        }
++    }
++    ::close(pair[0]);
++    ::close(pair[1]);
++    if (ambiguous) {
++        ::close(result);
++        return -1;
++    }
++    return result;
++}
++
++static std::optional<gfxstream::base::SharedMemory> exportAhbAsSharedMemory(
++    VulkanDispatch* vk, VkDevice device, VkDeviceMemory memory, VkDeviceSize size) {
++    if (!vk->vkGetMemoryAndroidHardwareBufferANDROID) {
++        GFXSTREAM_ERROR("vkGetMemoryAndroidHardwareBufferANDROID is missing.");
++        return std::nullopt;
++    }
++    const VkMemoryGetAndroidHardwareBufferInfoANDROID getAhbInfo = {
++        .sType = VK_STRUCTURE_TYPE_MEMORY_GET_ANDROID_HARDWARE_BUFFER_INFO_ANDROID,
++        .pNext = nullptr,
++        .memory = memory,
++    };
++    AHardwareBuffer* ahb = nullptr;
++    VkResult res = vk->vkGetMemoryAndroidHardwareBufferANDROID(device, &getAhbInfo, &ahb);
++    if (res != VK_SUCCESS || !ahb) {
++        GFXSTREAM_ERROR("vkGetMemoryAndroidHardwareBufferANDROID failed: %s",
++                        string_VkResult(res));
++        return std::nullopt;
++    }
++    const int fd = dupAhbDmaBuf(ahb, size);
++    AHardwareBuffer_release(ahb);
++    if (fd < 0) {
++        GFXSTREAM_ERROR("Expected one AHardwareBuffer dma-buf of at least %llu bytes.",
++                        static_cast<unsigned long long>(size));
++        return std::nullopt;
++    }
++    gfxstream::base::SharedMemory shmem("ahb-vk-" + std::to_string(getpid()), size);
++    shmem.adoptFd(fd);
++    return shmem;
++}
++#endif
++
+ using gfxstream::base::AutoLock;
+ using gfxstream::base::DescriptorType;
+ using gfxstream::base::Lock;
+@@ -380,6 +470,10 @@ class VkDecoderGlobalState::Impl {
+             .supportsDmaBuf = m_vkEmulation->supportsDmaBuf(),
+             .hostPageSize = VkMemoryAllocationHelper::DefaultHostPageSize(),
+             .guestPageSize = gfxstream::host::get_gfxstream_guest_page_size(),
++#if defined(__ANDROID__)
++            .cachedDmaHeapAvailable = access(VkMemoryAllocationHelper::kCachedDmaHeap, R_OK) == 0,
++            .uncachedDmaHeapAvailable = access(VkMemoryAllocationHelper::kUncachedDmaHeap, R_OK) == 0,
++#endif
+         };
+     }
+
+@@ -4765,6 +4859,13 @@ class VkDecoderGlobalState::Impl {
          if (!imageInfo) return VK_ERROR_OUT_OF_HOST_MEMORY;
  
          if (needsShadowImageBindLocked(vk, device, memoryInfo, image, imageInfo)) {
@@ -199,7 +305,27 @@ index e07c1ca..1132bdd 100644
              if (!performShadowImageBindLocked(vk, device, deviceInfo, memoryInfo, &image,
                                                &imageInfo, memory, memoryOffset)) {
                  return VK_ERROR_OUT_OF_DEVICE_MEMORY;
-@@ -9152,6 +9161,28 @@ class VkDecoderGlobalState::Impl {
+@@ -8999,6 +9100,19 @@ class VkDecoderGlobalState::Impl {
+         plan.externalMemoryNode.ownedDescriptor.release();
+ #endif
+
++#ifdef __ANDROID__
++        if (const auto* externalBlob = std::get_if<HostVisibleExternalBlobStrategy>(&plan.strategy);
++            externalBlob && externalBlob->exportAhbDmaBuf) {
++            auto shmem = exportAhbAsSharedMemory(vk, device, *pMemory, plan.allocationSize);
++            if (!shmem) {
++                vk->vkFreeMemory(device, *pMemory, nullptr);
++                *pMemory = VK_NULL_HANDLE;
++                return VK_ERROR_OUT_OF_DEVICE_MEMORY;
++            }
++            plan.backing = std::move(*shmem);
++        }
++#endif
++
+         // Stage 4: Commit post-allocation side effects, MemoryInfo, and optional host mapping.
+         if (const auto* importCb = std::get_if<ImportColorBufferStrategy>(&plan.strategy);
+             importCb && importCb->invalidateColorBuffer) {
+@@ -9152,6 +9266,28 @@ class VkDecoderGlobalState::Impl {
          return (uint8_t*)(info->ptr);
      }
  
@@ -228,7 +354,7 @@ index e07c1ca..1132bdd 100644
      VkDeviceSize getDeviceMemorySize(VkDeviceMemory memory) {
          std::lock_guard<std::mutex> lock(mMutex);
  
-@@ -15069,6 +15100,10 @@ uint8_t* VkDecoderGlobalState::getMappedHostPointer(VkDeviceMemory memory) {
+@@ -15069,6 +15205,10 @@ uint8_t* VkDecoderGlobalState::getMappedHostPointer(VkDeviceMemory memory) {
      return mImpl->getMappedHostPointer(memory);
  }
  
@@ -252,7 +378,7 @@ index aee6afc..d0cc537 100644
      bool usingDirectMapping() const;
  
 diff --git a/host/vulkan/vk_memory_allocation_helper.cpp b/host/vulkan/vk_memory_allocation_helper.cpp
-index ebd669b..1ee0c7b 100644
+index ebd669b..25113cb 100644
 --- a/host/vulkan/vk_memory_allocation_helper.cpp
 +++ b/host/vulkan/vk_memory_allocation_helper.cpp
 @@ -12,6 +12,13 @@
@@ -269,7 +395,23 @@ index ebd669b..1ee0c7b 100644
  #include "vk_memory_allocation_helper.h"
  
  #if defined(_WIN32)
-@@ -192,7 +199,13 @@ VkResult selectHostVisibleSharedMemoryStrategy(const VkMemoryAllocationHelper& h
+@@ -187,12 +194,29 @@ VkResult selectImportGuestBlobStrategy(uint64_t blobId,
+ #endif
+ }
+
++VkResult selectHostVisibleExternalBlobStrategy(const VkMemoryAllocationHelper& helper,
++                                               const VkMemoryAllocationInputs& inputs,
++                                               VkMemoryAllocationPlan* outPlan);
++
++#if defined(__ANDROID__)
++bool usesCachedDmaHeap(VkMemoryPropertyFlags flags) {
++    return (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) &&
++           !(flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
++}
++#endif
++
+ VkResult selectHostVisibleSharedMemoryStrategy(const VkMemoryAllocationHelper& helper,
+                                                const VkMemoryAllocationInputs& inputs,
                                                 VkMemoryAllocationPlan* outPlan) {
      // A system blob is imported as a host pointer, and a driver can ask for a
      // coarser alignment than a page: Apple silicon pages are 16KB.
@@ -283,23 +425,37 @@ index ebd669b..1ee0c7b 100644
      if (helper.supportsExternalMemoryHostProperties) {
          blobAlignment = std::max<uint64_t>(blobAlignment, helper.minImportedHostPointerAlignment);
      }
-@@ -211,7 +224,6 @@ VkResult selectHostVisibleSharedMemoryStrategy(const VkMemoryAllocationHelper& h
+@@ -211,8 +235,21 @@ VkResult selectHostVisibleSharedMemoryStrategy(const VkMemoryAllocationHelper& h
      }
      outPlan->allocationSize = alignedSize;
  
 -    const bool allocateAsUdmabuf = helper.features->VulkanAllocateHostVisibleAsUdmabuf.enabled();
      if (allocateAsUdmabuf) {
++#if defined(__ANDROID__)
++        const bool heapAvailable = usesCachedDmaHeap(outPlan->hostMemoryInfo.memoryType.propertyFlags)
++                                       ? helper.cachedDmaHeapAvailable
++                                       : helper.uncachedDmaHeapAvailable;
++        if ((!helper.canUseDmaBuf(inputs) || !heapAvailable) &&
++            helper.externalMemoryMode == ExternalMemory::Mode::AndroidAHB) {
++            VkResult res = selectHostVisibleExternalBlobStrategy(helper, inputs, outPlan);
++            if (res == VK_SUCCESS) {
++                std::get<HostVisibleExternalBlobStrategy>(outPlan->strategy).exportAhbDmaBuf =
++                    true;
++            }
++            return res;
++        }
++#endif
  #if defined(__linux__)
          if (!helper.canUseDmaBuf(inputs)) {
-@@ -485,6 +497,37 @@ VkResult executeHostVisibleSharedMemory(
+             GFXSTREAM_ERROR("dmabuf not supported");
+@@ -485,6 +522,36 @@ VkResult executeHostVisibleSharedMemory(
                          strategy.size);
  
      if (strategy.allocateAsUdmabuf) {
 +#if defined(__ANDROID__)
-+        const VkMemoryPropertyFlags hostFlags = outPlan->hostMemoryInfo.memoryType.propertyFlags;
-+        const bool cached = (hostFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) &&
-+                            !(hostFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-+        const char* heapPath = cached ? "/dev/dma_heap/system" : "/dev/dma_heap/system-uncached";
++        const char* heapPath = usesCachedDmaHeap(outPlan->hostMemoryInfo.memoryType.propertyFlags)
++                                   ? VkMemoryAllocationHelper::kCachedDmaHeap
++                                   : VkMemoryAllocationHelper::kUncachedDmaHeap;
 +        const int heapFd = ::open(heapPath, O_RDONLY | O_CLOEXEC);
 +        if (heapFd < 0) {
 +            GFXSTREAM_ERROR("Cannot open DMA heap %s: %s", heapPath, std::strerror(errno));
@@ -329,7 +485,7 @@ index ebd669b..1ee0c7b 100644
          // 0755 = user read write
          int ret = memory.createNoMapping(0755);
          if (ret) {
-@@ -514,6 +557,7 @@ VkResult executeHostVisibleSharedMemory(
+@@ -514,6 +581,7 @@ VkResult executeHostVisibleSharedMemory(
  #else
          GFXSTREAM_ERROR("Import from shared memory should not work here");
          return VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -337,6 +493,31 @@ index ebd669b..1ee0c7b 100644
  #endif
      } else if (systemBlobEnabled) {
          int ret = memory.create(0600);
+diff --git a/host/vulkan/vk_memory_allocation_helper.h b/host/vulkan/vk_memory_allocation_helper.h
+index 551671d..7392a2c 100644
+--- a/host/vulkan/vk_memory_allocation_helper.h
++++ b/host/vulkan/vk_memory_allocation_helper.h
+@@ -94,6 +94,7 @@ struct HostVisibleSharedMemoryStrategy {
+
+ struct HostVisibleExternalBlobStrategy {
+     VkExternalMemoryHandleTypeFlags handleTypes = 0;
++    bool exportAhbDmaBuf = false;
+ };
+
+ struct HostVisibleHeapMemoryStrategy {
+@@ -290,6 +291,12 @@ struct VkMemoryAllocationHelper {
+     bool supportsDmaBuf = false;
+     size_t hostPageSize = DefaultHostPageSize();
+     size_t guestPageSize = 4096;
++#if defined(__ANDROID__)
++    static constexpr const char* kCachedDmaHeap = "/dev/dma_heap/system";
++    static constexpr const char* kUncachedDmaHeap = "/dev/dma_heap/system-uncached";
++    bool cachedDmaHeapAvailable = false;
++    bool uncachedDmaHeapAvailable = false;
++#endif
+
+     static size_t DefaultHostPageSize();
+
 diff --git a/meson.build b/meson.build
 index 366d284..2f1f323 100644
 --- a/meson.build
