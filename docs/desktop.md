@@ -28,3 +28,4 @@ Check the GPU with `/run/bareboot-gpu/guest/bin/bareboot-gpu check`.
 - Pointer is always an arrow
 - US keyboard layout only
 - Linux and Windows clients are untested
+- Adreno (tested: Adreno 810): Vulkan works; OpenGL through Zink does not, because the driver lacks `VK_KHR_maintenance5`
