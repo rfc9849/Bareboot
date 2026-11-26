@@ -285,7 +285,7 @@
     <string name="check_group_init">systemd and OpenRC</string>
     <string name="check_group_containers">Docker and Podman</string>
     <string name="check_arm64">64-bit ARM processor</string>
-    <string name="check_kernel_version">Linux 6.5 or newer</string>
+    <string name="check_peer_pidfd">Kernel support for peer authentication</string>
     <string name="check_page_size">Memory page size</string>
     <string name="check_page_size_kib">%1$d KiB</string>
     <string name="check_page_size_untested">%1$d KiB pages have not been tested</string>
@@ -321,6 +321,7 @@
     <string name="check_kernel_release">Kernel %1$s</string>
     <string name="check_summary_blocked">This device cannot run Linux yet</string>
     <string name="check_summary_loading">Checking your kernel</string>
+    <string name="check_summary_unconfirmed">Device requirements unconfirmed</string>
     <string name="check_summary_ready">Ready to run Linux</string>
     <string name="check_summary_missing">Missing: %1$s</string>
     <string name="check_summary_init_ready">This kernel can also boot systemd and run Docker in a distribution.</string>

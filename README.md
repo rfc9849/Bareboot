@@ -19,7 +19,7 @@ Your Android phone already runs Linux. Bareboot runs ARM64 distributions directl
 ## Requirements
 
 - ARM64 phone rooted with KernelSU or Magisk
-- Android 11+, Linux 6.5+, SELinux Enforcing
+- Android 11+, SELinux Enforcing, Linux 6.5+ or Linux 6.1 with a `SO_PEERPIDFD` backport
 
 systemd and Docker also need a kernel with PID namespaces. See [kernel features](docs/kernel.md).
 

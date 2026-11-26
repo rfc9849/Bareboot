@@ -1,6 +1,6 @@
 # Install
 
-You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, Linux 6.5+ (`adb shell uname -r`), and SELinux Enforcing.
+You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, SELinux Enforcing, and Linux 6.5+ or Linux 6.1 with a `SO_PEERPIDFD` backport.
 
 1. Install `bareboot-module.zip` from **Modules** in your root manager. Magisk and older KernelSU need a reboot.
 2. Install the APK and open Bareboot.
@@ -19,6 +19,6 @@ Remove the module and the app. Your images stay in `/data/adb/bareboot` unless *
 
 - **Service not running:** check the module is enabled, reboot if needed, read `/data/adb/bareboot/barebootd.log`.
 - **App not allowed:** tap **Action** on the module.
-- **Service exits at start:** SELinux must be Enforcing.
+- **Service exits at start:** SELinux must be Enforcing. If the log says `SO_PEERPIDFD check failed` with `Protocol not available`, use a kernel that supports `SO_PEERPIDFD`.
 
 The app's **Diagnostics** screen shows the logs.

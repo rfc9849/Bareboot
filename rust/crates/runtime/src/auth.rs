@@ -3,6 +3,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 pub struct PeerPolicy {
@@ -12,6 +13,12 @@ pub struct PeerPolicy {
 
 impl PeerPolicy {
     pub fn new() -> io::Result<Self> {
+        {
+            let (socket, _peer) = UnixStream::pair()?;
+            peer_pidfd(socket.as_raw_fd()).map_err(|e| {
+                io::Error::new(e.kind(), format!("SO_PEERPIDFD check failed: {e}"))
+            })?;
+        }
         let pid_namespace = match fs::read_link("/proc/self/ns/pid") {
             Ok(namespace) => Some(namespace),
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
@@ -34,7 +41,7 @@ impl PeerPolicy {
         if cred.pid <= 0 {
             return None;
         }
-        let peer = peer_pidfd(fd)?;
+        let peer = peer_pidfd(fd).ok()?;
         if !process_alive(&peer) {
             return None;
         }
@@ -75,7 +82,7 @@ fn peer_credentials(fd: RawFd) -> Option<libc::ucred> {
     (rc == 0 && len as usize == size_of::<libc::ucred>()).then_some(cred)
 }
 
-fn peer_pidfd(fd: RawFd) -> Option<OwnedFd> {
+fn peer_pidfd(fd: RawFd) -> io::Result<OwnedFd> {
     let mut peer: RawFd = -1;
     let mut len = size_of::<RawFd>() as libc::socklen_t;
     let rc = unsafe {
@@ -87,11 +94,17 @@ fn peer_pidfd(fd: RawFd) -> Option<OwnedFd> {
             &mut len,
         )
     };
-    if rc != 0 || peer < 0 {
-        return None;
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if peer < 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid peer pidfd"));
     }
     let owned = unsafe { OwnedFd::from_raw_fd(peer) };
-    (len as usize == size_of::<RawFd>()).then_some(owned)
+    if len as usize != size_of::<RawFd>() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid peer pidfd size"));
+    }
+    Ok(owned)
 }
 
 fn process_alive(peer: &OwnedFd) -> bool {

@@ -285,7 +285,7 @@
     <string name="check_group_init">systemd и OpenRC</string>
     <string name="check_group_containers">Docker и Podman</string>
     <string name="check_arm64">64-битный процессор ARM</string>
-    <string name="check_kernel_version">Linux 6.5 или новее</string>
+    <string name="check_peer_pidfd">Проверка подключений к службе ядром</string>
     <string name="check_page_size">Размер страницы памяти</string>
     <string name="check_page_size_kib">%1$d КиБ</string>
     <string name="check_page_size_untested">Страницы %1$d КиБ не проверялись</string>
@@ -321,6 +321,7 @@
     <string name="check_kernel_release">Ядро %1$s</string>
     <string name="check_summary_blocked">Это устройство пока не может запускать Linux</string>
     <string name="check_summary_loading">Проверка ядра</string>
+    <string name="check_summary_unconfirmed">Совместимость устройства не подтверждена</string>
     <string name="check_summary_ready">Готово к запуску Linux</string>
     <string name="check_summary_missing">Отсутствует: %1$s</string>
     <string name="check_summary_init_ready">Это ядро также может запускать systemd и Docker в дистрибутиве.</string>

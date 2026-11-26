@@ -66,11 +66,8 @@ object SystemChecks {
         "config_SECCOMP_FILTER" to Spec(R.string.check_seccomp_filter, CheckGroup.Containers, CheckLevel.Optional, "CONFIG_SECCOMP_FILTER"),
     )
 
-    fun device(context: Context): List<CheckItem> {
+    fun device(context: Context, serviceReady: Boolean): List<CheckItem> {
         val release = System.getProperty("os.version").orEmpty()
-        val version = Regex("^(\\d+)\\.(\\d+)").find(release)?.destructured
-            ?.let { (major, minor) -> major.toInt() to minor.toInt() }
-        val kernelOk = version?.let { (major, minor) -> major > 6 || (major == 6 && minor >= 5) }
         val pageSize = Os.sysconf(OsConstants._SC_PAGESIZE)
         val kib = (pageSize / 1024).toInt()
         return listOf(
@@ -83,16 +80,12 @@ object SystemChecks {
                 state = if ("arm64-v8a" in Build.SUPPORTED_64_BIT_ABIS) CheckState.Present else CheckState.Missing,
             ),
             CheckItem(
-                id = "kernel_version",
-                label = context.getString(R.string.check_kernel_version),
+                id = "peer_pidfd",
+                label = context.getString(R.string.check_peer_pidfd),
                 detail = release.substringBefore('-').ifEmpty { null },
                 group = CheckGroup.Device,
                 level = CheckLevel.Required,
-                state = when (kernelOk) {
-                    true -> CheckState.Present
-                    false -> CheckState.Missing
-                    null -> CheckState.Unknown
-                },
+                state = if (serviceReady) CheckState.Present else CheckState.Unknown,
             ),
             CheckItem(
                 id = "page_size",

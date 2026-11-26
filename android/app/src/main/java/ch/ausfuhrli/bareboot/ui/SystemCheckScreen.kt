@@ -56,10 +56,10 @@ data class CheckResults(
 @Composable
 fun rememberCheckResults(vm: BarebootViewModel): CheckResults {
     val context = LocalContext.current
-    val device = remember(context) { SystemChecks.device(context) }
     val report = vm.kernelReport
     val error = vm.kernelReportError
     val ready = vm.service is ServiceState.Ready
+    val device = remember(context, ready) { SystemChecks.device(context, ready) }
     val items = device + (report?.let { SystemChecks.fromReport(context, it) } ?: emptyList())
     val loading = report == null && error == null && (ready || vm.service is ServiceState.Checking)
     val note = error ?: when (vm.service) {
@@ -119,12 +119,13 @@ fun SystemCheckScreen(vm: BarebootViewModel) {
 fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val blocking = results.blocking
+    val unconfirmed = results.items.any { it.level == CheckLevel.Required && it.state == CheckState.Unknown }
     val initReady = results.items.filter { it.id in BOOT_INIT_CHECKS }.let { needed ->
         needed.size == BOOT_INIT_CHECKS.size && needed.all { it.state == CheckState.Present }
     }
     val (container, content) = when {
         blocking.isNotEmpty() -> colors.errorContainer to colors.onErrorContainer
-        results.loading -> colors.surfaceContainerHigh to colors.onSurface
+        results.loading || unconfirmed -> colors.surfaceContainerHigh to colors.onSurface
         else -> colors.primaryContainer to colors.onPrimaryContainer
     }
     Surface(
@@ -143,6 +144,9 @@ fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
                     MaterialShapes.Burst, AppIcons.PriorityHigh, colors.error, colors.onError, 56.dp,
                 )
                 results.loading -> LoadingIndicator(modifier = Modifier.size(56.dp))
+                unconfirmed -> ShapeIcon(
+                    MaterialShapes.Burst, AppIcons.PriorityHigh, colors.onSurface, colors.surfaceContainerHighest, 56.dp,
+                )
                 else -> ShapeIcon(
                     MaterialShapes.Cookie9Sided, AppIcons.Done, colors.primary, colors.onPrimary, 56.dp,
                 )
@@ -152,6 +156,7 @@ fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
                     text = when {
                         blocking.isNotEmpty() -> stringResource(R.string.check_summary_blocked)
                         results.loading -> stringResource(R.string.check_summary_loading)
+                        unconfirmed -> stringResource(R.string.check_summary_unconfirmed)
                         else -> stringResource(R.string.check_summary_ready)
                     },
                     style = MaterialTheme.typography.titleMedium,
@@ -160,6 +165,7 @@ fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
                     blocking.isNotEmpty() -> stringResource(R.string.check_summary_missing, blocking.joinToString { it.label })
                     results.loading -> null
                     results.note != null -> results.note
+                    unconfirmed -> null
                     initReady -> stringResource(R.string.check_summary_init_ready)
                     else -> stringResource(R.string.check_summary_init_needed)
                 }
