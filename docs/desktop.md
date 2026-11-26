@@ -4,7 +4,7 @@ Linux apps open as normal windows on your computer, connected over USB. Vulkan a
 
 ## Setup
 
-On the computer: `adb`, Rust, and FFmpeg (`brew install ffmpeg`, or `libavcodec-dev` etc. on Linux). Allow root for the ADB shell in your root manager.
+On the computer: `adb`, Rust, and FFmpeg (`brew install ffmpeg`, or `libavcodec-dev` etc. on Linux). Allow root for the ADB shell in your root manager. Set `ANDROID_SERIAL` to the device serial from `adb devices` to select a specific device.
 
 The module includes the GPU bundle by default. Images start with GPU acceleration when it is available. To disable it for an image, stop the image and turn off **GPU acceleration** in its settings. An image can start without GPU acceleration if the bundle is missing or the renderer fails to start.
 
