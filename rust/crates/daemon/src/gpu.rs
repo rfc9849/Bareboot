@@ -59,9 +59,13 @@ pub fn bundle() -> Option<PathBuf> {
     .then_some(root)
 }
 
-pub fn heap_present() -> bool {
-    fs::metadata("/dev/dma_heap/system-uncached")
-        .is_ok_and(|meta| meta.file_type().is_char_device())
+/// Host-visible GPU memory comes from a DMA heap when the Vulkan driver imports dma-bufs
+/// (system-uncached, PowerVR), or from gralloc through exported AHardwareBuffers (Adreno).
+/// Kumquat picks the path at runtime; both need the system DMA heap.
+pub fn memory_available() -> bool {
+    ["/dev/dma_heap/system-uncached", "/dev/dma_heap/system"]
+        .iter()
+        .any(|heap| fs::metadata(heap).is_ok_and(|meta| meta.file_type().is_char_device()))
 }
 
 fn prepare_host_mount() -> io::Result<()> {
@@ -85,10 +89,10 @@ fn prepare_host_mount() -> io::Result<()> {
 
 impl Renderer {
     pub fn start(bundle: &Path) -> io::Result<Self> {
-        if !heap_present() {
+        if !memory_available() {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "system-uncached DMA heap is missing",
+                "no system DMA heap for GPU memory",
             ));
         }
         prepare_host_mount()?;
