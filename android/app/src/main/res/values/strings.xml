@@ -242,7 +242,11 @@
     <string name="settings_run_setup_again">Run setup again</string>
     <string name="settings_service_protocol">Service protocol %1$d</string>
     <string name="settings_service_connecting">Connecting to the service</string>
+    <string name="settings_section_about">About</string>
     <string name="settings_version">Bareboot %1$s</string>
+    <string name="settings_about_summary">%1$s · Apache-2.0</string>
+    <string name="settings_github">GitHub</string>
+    <string name="settings_browser_open_failed">No browser found to open the link</string>
 
     <!-- Diagnostics screen -->
     <string name="diagnostics_title">Diagnostics</string>

@@ -2,6 +2,7 @@ package ch.ausfuhrli.bareboot.ui
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +80,8 @@ import ch.ausfuhrli.bareboot.MAX_FONT_SP
 import ch.ausfuhrli.bareboot.MIN_FONT_SP
 import ch.ausfuhrli.bareboot.Screen
 import ch.ausfuhrli.bareboot.ServiceState
+
+private const val GITHUB_URL = "https://github.com/rfc9849/Bareboot"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -285,19 +288,25 @@ fun SettingsScreen(vm: BarebootViewModel) {
                     SegmentedListItem(
                         onClick = { vm.screen = Screen.SystemCheck },
                         colors = colors,
-                        shapes = switchRowShapes(0, 3),
+                        shapes = switchRowShapes(0, 2),
                         leadingContent = { Icon(AppIcons.Memory, contentDescription = null) },
                         supportingContent = { Text(stringResource(R.string.settings_system_check_desc)) },
                     ) { Text(stringResource(R.string.settings_system_check)) }
                     SegmentedListItem(
                         onClick = vm::restartOnboarding,
                         colors = colors,
-                        shapes = switchRowShapes(1, 3),
+                        shapes = switchRowShapes(1, 2),
                         leadingContent = { Icon(AppIcons.Restore, contentDescription = null) },
                     ) { Text(stringResource(R.string.settings_run_setup_again)) }
+                }
+            }
+
+            item { SectionHeader(stringResource(R.string.settings_section_about)) }
+            item {
+                SegmentedColumn {
                     SegmentedListItem(
                         colors = colors,
-                        shapes = switchRowShapes(2, 3),
+                        shapes = switchRowShapes(0, 2),
                         leadingContent = { Icon(AppIcons.Info, contentDescription = null) },
                         supportingContent = {
                             val service = when (val s = vm.service) {
@@ -307,9 +316,22 @@ fun SettingsScreen(vm: BarebootViewModel) {
                                 is ServiceState.Failed -> stringResource(R.string.home_service_error)
                                 ServiceState.Checking -> stringResource(R.string.settings_service_connecting)
                             }
-                            Text(service)
+                            Text(stringResource(R.string.settings_about_summary, service))
                         },
                     ) { Text(stringResource(R.string.settings_version, version.orEmpty())) }
+                    SegmentedListItem(
+                        onClick = {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
+                            } catch (_: ActivityNotFoundException) {
+                                vm.messages.trySend(context.getString(R.string.settings_browser_open_failed))
+                            }
+                        },
+                        colors = colors,
+                        shapes = switchRowShapes(1, 2),
+                        leadingContent = { Icon(AppIcons.OpenInNew, contentDescription = null) },
+                        supportingContent = { Text(GITHUB_URL) },
+                    ) { Text(stringResource(R.string.settings_github)) }
                 }
             }
         }

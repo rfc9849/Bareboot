@@ -242,7 +242,11 @@
     <string name="settings_run_setup_again">Запустить настройку снова</string>
     <string name="settings_service_protocol">Протокол службы %1$d</string>
     <string name="settings_service_connecting">Подключение к службе</string>
+    <string name="settings_section_about">О приложении</string>
     <string name="settings_version">Bareboot %1$s</string>
+    <string name="settings_about_summary">%1$s · Apache-2.0</string>
+    <string name="settings_github">GitHub</string>
+    <string name="settings_browser_open_failed">Не удалось открыть браузер</string>
 
     <!-- Диагностика -->
     <string name="diagnostics_title">Диагностика</string>
