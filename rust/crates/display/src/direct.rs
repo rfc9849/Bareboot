@@ -67,6 +67,12 @@ pub(super) struct Buffer {
     fds: Vec<OwnedFd>,
 }
 
+impl Buffer {
+    fn invalid() -> Self {
+        Self { width: 0, height: 0, metadata: Vec::new(), fds: Vec::new() }
+    }
+}
+
 enum Release {
     Encoder,
     Fence(OwnedFd),
@@ -236,6 +242,10 @@ impl Direct {
         let id = self.serial;
         let kind: u32 = if fence.is_some() { 1 } else { 7 };
         let image = buffer.data::<Buffer>().ok_or(io::ErrorKind::InvalidData)?;
+        if image.fds.is_empty() {
+            buffer.release();
+            return Ok(false);
+        }
         let mut data = Vec::with_capacity(52 + image.metadata.len());
         let sent = match target {
             Target::Stream(stream, source) => {
@@ -465,8 +475,11 @@ pub(super) struct DmabufParams {
 impl DmabufParams {
     fn take(&self, format: u32) -> Option<OwnedFd> {
         let (fd, modifier) = self.plane.lock().unwrap().take()?;
-        (DMABUF_FORMATS.contains(&format) && (modifier == MOD_LINEAR || modifier == MOD_INVALID))
-            .then_some(fd)
+        let supported = DMABUF_FORMATS.contains(&format) && (modifier == MOD_LINEAR || modifier == MOD_INVALID);
+        if !supported {
+            eprintln!("rejected dmabuf format {format:#x} modifier {modifier:#x}");
+        }
+        supported.then_some(fd)
     }
 }
 
@@ -475,7 +488,10 @@ fn dmabuf_buffer(state: &State, fd: OwnedFd, width: i32, height: i32) -> Option<
     if !(1..=MAX_EDGE).contains(&width) || !(1..=MAX_EDGE).contains(&height) {
         return None;
     }
-    direct.get(fd, width, height).ok()
+    direct
+        .get(fd, width, height)
+        .map_err(|e| eprintln!("could not import a {width}x{height} dmabuf: {e}"))
+        .ok()
 }
 
 impl GlobalDispatch<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, ()> for State {
@@ -554,7 +570,8 @@ impl Dispatch<zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1, DmabufParams> 
                         init.init(buffer_id, buffer);
                     }
                     None => {
-                        init.post_error(buffer_id, Error::InvalidWlBuffer, "unsupported dmabuf");
+                        init.init(buffer_id, Buffer::invalid());
+                        resource.failed();
                     }
                 }
             }
