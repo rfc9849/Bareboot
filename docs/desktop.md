@@ -4,15 +4,19 @@ Linux apps open as normal windows on your computer, connected over USB. Vulkan a
 
 ## Setup
 
-On the computer: `adb`, Rust, and FFmpeg (`brew install ffmpeg`, or `libavcodec-dev` etc. on Linux). Allow root for the ADB shell in your root manager. Set `ANDROID_SERIAL` to the device serial from `adb devices` to select a specific device.
+On Apple Silicon, unzip `bareboot-desktop-macos-arm64.zip` and install `adb` and FFmpeg 9 with `brew install android-platform-tools ffmpeg`. The ZIP does not need Rust. Build it on a Mac with `bash tools/desktop/package-macos.sh`.
+
+Allow root for ADB Shell in your root manager. Set `ANDROID_SERIAL` to the device serial from `adb devices` to select a specific device.
 
 The module includes the GPU bundle by default. Images start with GPU acceleration when it is available. To disable it for an image, stop the image and turn off **GPU acceleration** in its settings. An image can start without GPU acceleration if the bundle is missing or the renderer fails to start.
 
 ## Run
 
 ```sh
-cargo run --release --manifest-path tools/desktop/Cargo.toml -- debian
+./bareboot-desktop debian
 ```
+
+If building from source, install Rust and the FFmpeg development libraries and run `cargo run --release --manifest-path tools/desktop/Cargo.toml -- debian`.
 
 Then start apps in the image:
 
