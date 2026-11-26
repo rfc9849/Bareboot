@@ -1,6 +1,6 @@
 # Kernel features
 
-A stock Android kernel runs shells, packages, SSH, and GUI apps. Some features need kernel options most phones don't ship. The app's **System check** shows what your kernel has.
+Bareboot needs `SO_PEERPIDFD` to authenticate clients. Linux 6.1 needs a backport of this option. The app's **System check** shows which kernel features are available.
 
 | Option | Needed for |
 |---|---|

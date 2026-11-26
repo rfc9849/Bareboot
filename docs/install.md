@@ -1,6 +1,6 @@
 # Install
 
-You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, SELinux Enforcing, and Linux 6.5+ or Linux 6.1 with a `SO_PEERPIDFD` backport.
+You need an ARM64 phone rooted with KernelSU or Magisk, Android 11+, and SELinux Enforcing. The kernel must support `SO_PEERPIDFD`. Linux 6.1 needs a backport of this option.
 
 1. Install `bareboot-module.zip` from **Modules** in your root manager. Magisk and older KernelSU need a reboot.
 2. Install the APK and open Bareboot.
