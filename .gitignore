@@ -1,5 +1,6 @@
 /rust/target/
 /tools/desktop/target/
+/tools/bench/target/
 /tools/__pycache__/
 /dist/
 /android/.gradle/
