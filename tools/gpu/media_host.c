@@ -392,6 +392,8 @@ static void enc_stop_codec(struct EncStream *s) {
     s->sps_len = 0;
 }
 
+#define ENC_PIXEL_RATE 480000000LL
+
 static int round_up(int v, int step) {
     return (v + step - 1) / step * step;
 }
@@ -406,35 +408,44 @@ static bool enc_start_codec(struct EncStream *s, int w, int h) {
         return true;
     }
     enc_stop_codec(s);
-    AMediaCodec *codec = AMediaCodec_createEncoderByType("video/avc");
-    if (!codec) return false;
     int64_t rate = (int64_t)ew * eh * 12;
     if (rate < 4000000) rate = 4000000;
     if (rate > 80000000) rate = 80000000;
-    AMediaFormat *fmt = AMediaFormat_new();
-    AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, ew);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, eh);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_BIT_RATE, (int32_t)rate);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_FRAME_RATE, 30);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 10);
-    AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 0x7f000789);
-    AMediaFormat_setInt32(fmt, "max-bframes", 0);
-    AMediaFormat_setInt32(fmt, "latency", 1);
-    AMediaFormat_setInt32(fmt, "priority", 0);
-    AMediaFormat_setInt32(fmt, "bitrate-mode", 1);
-    AMediaFormat_setInt32(fmt, "video-qp-i-max", 22);
-    AMediaFormat_setInt32(fmt, "video-qp-p-max", 24);
-    media_status_t st = AMediaCodec_configure(codec, fmt, NULL, NULL, AMEDIACODEC_CONFIGURE_FLAG_ENCODE);
-    AMediaFormat_delete(fmt);
+    int32_t fast_rate = (int32_t)(ENC_PIXEL_RATE / ((int64_t)ew * eh));
+    if (fast_rate > 240) fast_rate = 240;
+    if (fast_rate < 60) fast_rate = 60;
+    AMediaCodec *codec = NULL;
     ANativeWindow *win = NULL;
-    if (st == AMEDIA_OK) st = AMediaCodec_createInputSurface(codec, &win);
-    if (st == AMEDIA_OK) st = AMediaCodec_start(codec);
-    if (st != AMEDIA_OK || !win) {
+    for (int attempt = 0; attempt < 3; attempt++) {
+        int32_t operating = attempt == 0 ? fast_rate : attempt == 1 ? fast_rate / 2 : 0;
+        codec = AMediaCodec_createEncoderByType("video/avc");
+        if (!codec) continue;
+        AMediaFormat *fmt = AMediaFormat_new();
+        AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, ew);
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, eh);
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_BIT_RATE, (int32_t)rate);
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_FRAME_RATE, operating ? 60 : 30);
+        if (operating) AMediaFormat_setInt32(fmt, "operating-rate", operating);
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 10);
+        AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_COLOR_FORMAT, 0x7f000789);
+        AMediaFormat_setInt32(fmt, "max-bframes", 0);
+        AMediaFormat_setInt32(fmt, "latency", 1);
+        AMediaFormat_setInt32(fmt, "priority", 0);
+        AMediaFormat_setInt32(fmt, "bitrate-mode", 1);
+        AMediaFormat_setInt32(fmt, "video-qp-i-max", 22);
+        AMediaFormat_setInt32(fmt, "video-qp-p-max", 24);
+        media_status_t st = AMediaCodec_configure(codec, fmt, NULL, NULL, AMEDIACODEC_CONFIGURE_FLAG_ENCODE);
+        AMediaFormat_delete(fmt);
+        if (st == AMEDIA_OK) st = AMediaCodec_createInputSurface(codec, &win);
+        if (st == AMEDIA_OK) st = AMediaCodec_start(codec);
+        if (st == AMEDIA_OK && win) break;
         if (win) ANativeWindow_release(win);
+        win = NULL;
         AMediaCodec_delete(codec);
-        return false;
+        codec = NULL;
     }
+    if (!codec) return false;
     EGLSurface surf = eglCreateWindowSurface(sh->dpy, sh->cfg, win, NULL);
     if (surf == EGL_NO_SURFACE) {
         ANativeWindow_release(win);
@@ -1148,7 +1159,7 @@ static void *client_thread(void *arg) {
             }
             if (st == AMEDIA_OK) st = AImageReader_getWindow(reader, &win);
             if (st == AMEDIA_OK) {
-                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, mime);
+                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, (int32_t)w);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, (int32_t)h);
                 if (csd0_len > 0) AMediaFormat_setBuffer(fmt, "csd-0", buf + 20, csd0_len);
@@ -1265,7 +1276,7 @@ static void *client_thread(void *arg) {
             }
             if (st == AMEDIA_OK) st = AImageReader_getWindow(reader, &win);
             if (st == AMEDIA_OK) {
-                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, mime);
+                AMediaFormat_setString(fmt, AMEDIAFORMAT_KEY_MIME, "video/avc");
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_WIDTH, (int32_t)w);
                 AMediaFormat_setInt32(fmt, AMEDIAFORMAT_KEY_HEIGHT, (int32_t)h);
                 AMediaFormat_setInt32(fmt, "operating-rate", 120);
