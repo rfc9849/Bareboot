@@ -142,6 +142,9 @@
 
     <!-- Install form -->
     <string name="install_catalog_error">Could not load the list of distributions: %1$s</string>
+    <string name="install_catalog_empty">The server returned no ARM64 distributions. Try again later.</string>
+    <string name="install_show_options">Show install options</string>
+    <string name="install_hide_options">Hide install options</string>
     <string name="install_section_distro">Distribution</string>
     <string name="install_rolling_release">Rolling release</string>
     <string name="install_section_version">Version</string>
@@ -253,6 +256,8 @@
     <string name="diagnostics_report_copied">Report copied</string>
     <string name="diagnostics_privacy_note">The report lists Bareboot and Android versions, the kernel release, missing kernel features, your images, and these logs. Check it before sharing.</string>
     <string name="diagnostics_log_empty">The log is empty.</string>
+    <string name="diagnostics_startup_command" translatable="false">adb shell &quot;su -c \'tail -n 80 /data/adb/bareboot/barebootd.log\'&quot;</string>
+    <string name="diagnostics_startup_help">If the module is enabled and the service still will not start after a reboot, allow root for ADB Shell in your root manager and run this on your computer:\n\n%1$s\n\nIf the log says SO_PEERPIDFD is unavailable, use a kernel that supports it.</string>
 
     <!-- Onboarding screen -->
     <string name="onboarding_welcome_title">Linux on your phone, natively</string>
@@ -324,8 +329,21 @@
     <string name="check_summary_unconfirmed">Device requirements unconfirmed</string>
     <string name="check_summary_ready">Ready to run Linux</string>
     <string name="check_summary_missing">Missing: %1$s</string>
-    <string name="check_summary_init_ready">This kernel can also boot systemd and run Docker in a distribution.</string>
-    <string name="check_summary_init_needed">Booting systemd and running Docker need CONFIG_PID_NS in the kernel.</string>
+    <string name="check_summary_init_ready">systemd and OpenRC: turn on Boot the distribution\'s init in the image settings.</string>
+    <string name="check_summary_init_needed">systemd and OpenRC need PID and cgroup namespaces and cgroup v2.</string>
+    <string name="check_summary_init_unknown">systemd and OpenRC: the kernel requirements could not be confirmed.</string>
+    <string name="check_summary_docker_bridge_missing">Docker with bridge networking needs init, isolated networking, veth, Linux bridge, and bridge netfilter.</string>
+    <string name="check_summary_docker_firewall_missing">Docker with bridge networking needs nftables with iptables compatibility or legacy iptables with addrtype.</string>
+    <string name="check_summary_docker_ready">Docker with bridge networking: turn on init and isolated networking in the image settings.</string>
+    <string name="check_summary_docker_legacy">Docker with bridge networking: turn on init and isolated networking, then switch the distribution to iptables-legacy.</string>
+    <string name="check_summary_docker_unknown">Docker with bridge networking: the kernel requirements could not be confirmed.</string>
+    <string name="check_summary_docker_ipc">This kernel may need docker run --ipc host --tmpfs /dev/mqueue.</string>
+    <string name="check_state_present">Available</string>
+    <string name="check_state_missing">Unavailable</string>
+    <string name="check_state_unknown">Unknown</string>
+    <string name="image_stop_confirm_title">Stop %1$s?</string>
+    <string name="extra_keys_show">Show more terminal keys</string>
+    <string name="extra_keys_hide">Hide extra terminal keys</string>
     <string name="check_group_init_desc">Not needed for shells. The PID, cgroup namespace, and cgroup v2 checks let an image boot its own init.</string>
     <string name="check_group_containers_desc">Not needed for shells. Docker runs with host networking once an image boots systemd; the others add container networking and isolation.</string>
     <string name="check_available_count">%1$d of %2$d available</string>

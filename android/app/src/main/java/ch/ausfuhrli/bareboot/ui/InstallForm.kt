@@ -10,17 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +31,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -95,7 +96,7 @@ fun InstallFormState.choice(catalog: List<Distro>?, existing: List<String>): Ins
 
 private fun defaultImageName(distro: Distro, existing: List<String>): String {
     val base = distro.defaultUser
-    return if (base !in existing) base else (2..99).map { "$base-$it" }.first { it !in existing }
+    return if (base !in existing) base else generateSequence(2) { it + 1 }.map { "$base-$it" }.first { it !in existing }
 }
 
 private fun nameErrorRes(name: String, existing: List<String>): Int? = when {
@@ -117,7 +118,7 @@ fun InstallForm(vm: BarebootViewModel, state: InstallFormState, modifier: Modifi
     val existing = vm.images.map { it.name }
     Column(modifier) {
         when {
-            catalog == null && vm.catalogError != null -> Column(
+            catalog?.isEmpty() == true || (catalog == null && vm.catalogError != null) -> Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
@@ -125,7 +126,8 @@ fun InstallForm(vm: BarebootViewModel, state: InstallFormState, modifier: Modifi
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    stringResource(R.string.install_catalog_error, vm.catalogError.orEmpty()),
+                    vm.catalogError?.let { stringResource(R.string.install_catalog_error, it) }
+                        ?: stringResource(R.string.install_catalog_empty),
                     textAlign = TextAlign.Center,
                 )
                 Button(onClick = vm::loadCatalog) { Text(stringResource(R.string.action_try_again)) }
@@ -147,44 +149,47 @@ fun InstallForm(vm: BarebootViewModel, state: InstallFormState, modifier: Modifi
 private fun CatalogForm(state: InstallFormState, catalog: List<Distro>, existing: List<String>) {
     val distro = catalog.firstOrNull { it.id == state.distroId } ?: catalog.first()
     val release = distro.releases.firstOrNull { it.release == state.releaseName } ?: distro.defaultRelease
-    val colors = MaterialTheme.colorScheme
+    var choosingDistro by remember { mutableStateOf(false) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
 
     SectionHeader(stringResource(R.string.install_section_distro))
-    SegmentedColumn {
-        catalog.forEachIndexed { index, option ->
-            val selected = option.id == distro.id
-            SegmentedListItem(
-                selected = selected,
-                onClick = {
-                    state.distroId = option.id
-                    state.releaseName = null
-                },
-                shapes = switchRowShapes(index, catalog.size),
-                colors = listRowColors(),
-                leadingContent = {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (selected) colors.primary else colors.secondaryContainer,
-                        contentColor = if (selected) colors.onPrimary else colors.onSecondaryContainer,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(option.name.take(1), style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                },
-                supportingContent = {
-                    val shown = if (selected) release else option.defaultRelease
-                    Text(shown.label.ifEmpty { stringResource(R.string.install_rolling_release) })
-                },
-                trailingContent = {
-                    if (selected) Icon(AppIcons.CheckCircle, contentDescription = stringResource(R.string.label_selected), tint = colors.primary)
-                },
-            ) {
-                Text(option.name)
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box {
+            val version = release.label.ifEmpty { stringResource(R.string.install_rolling_release) }
+            OutlinedButton(onClick = { choosingDistro = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("${distro.name} · $version", modifier = Modifier.weight(1f))
+                Icon(AppIcons.ExpandMore, contentDescription = null)
+            }
+            DropdownMenu(expanded = choosingDistro, onDismissRequest = { choosingDistro = false }) {
+                catalog.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.name) },
+                        trailingIcon = if (option == distro) {
+                            { Icon(AppIcons.CheckCircle, contentDescription = stringResource(R.string.label_selected)) }
+                        } else {
+                            null
+                        },
+                        onClick = {
+                            state.distroId = option.id
+                            state.releaseName = null
+                            choosingDistro = false
+                        },
+                    )
+                }
             }
         }
+        Text(
+            stringResource(R.string.install_download_note, formatBytes(release.size)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = { advanced = !advanced }) {
+            Icon(if (advanced) AppIcons.ExpandLess else AppIcons.ExpandMore, contentDescription = null)
+            Text(stringResource(if (advanced) R.string.install_hide_options else R.string.install_show_options))
+        }
     }
+
+    if (!advanced) return
 
     if (distro.releases.size > 1) {
         SectionHeader(stringResource(R.string.install_section_version))
@@ -232,11 +237,6 @@ private fun CatalogForm(state: InstallFormState, catalog: List<Distro>, existing
             modifier = Modifier.fillMaxWidth(),
         )
         ImageSizePicker(state.sizeGb, { state.sizeGb = it })
-        Text(
-            stringResource(R.string.install_download_note, formatBytes(release.size)),
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant,
-        )
     }
 }
 

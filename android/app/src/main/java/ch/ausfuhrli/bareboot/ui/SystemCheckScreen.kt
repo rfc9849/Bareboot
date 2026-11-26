@@ -49,6 +49,8 @@ data class CheckResults(
     val items: List<CheckItem>,
     val loading: Boolean,
     val note: String?,
+    val reportAvailable: Boolean,
+    val isolatedNetwork: Boolean,
 ) {
     val blocking: List<CheckItem> get() = SystemChecks.blocking(items)
 }
@@ -68,7 +70,7 @@ fun rememberCheckResults(vm: BarebootViewModel): CheckResults {
         is ServiceState.Failed -> (vm.service as ServiceState.Failed).message
         else -> null
     }
-    return CheckResults(items, loading, note)
+    return CheckResults(items, loading, note, ready && report != null, vm.isolatedNetworking)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,10 +121,8 @@ fun SystemCheckScreen(vm: BarebootViewModel) {
 fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val blocking = results.blocking
-    val unconfirmed = results.items.any { it.level == CheckLevel.Required && it.state == CheckState.Unknown }
-    val initReady = results.items.filter { it.id in BOOT_INIT_CHECKS }.let { needed ->
-        needed.size == BOOT_INIT_CHECKS.size && needed.all { it.state == CheckState.Present }
-    }
+    val unconfirmed = !results.reportAvailable ||
+        results.items.any { it.level == CheckLevel.Required && it.state == CheckState.Unknown }
     val (container, content) = when {
         blocking.isNotEmpty() -> colors.errorContainer to colors.onErrorContainer
         results.loading || unconfirmed -> colors.surfaceContainerHigh to colors.onSurface
@@ -165,17 +165,60 @@ fun CheckSummary(results: CheckResults, modifier: Modifier = Modifier) {
                     blocking.isNotEmpty() -> stringResource(R.string.check_summary_missing, blocking.joinToString { it.label })
                     results.loading -> null
                     results.note != null -> results.note
-                    unconfirmed -> null
-                    initReady -> stringResource(R.string.check_summary_init_ready)
-                    else -> stringResource(R.string.check_summary_init_needed)
+                    else -> null
                 }
                 detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (!results.loading && blocking.isEmpty() && !unconfirmed) {
+                    FeatureChecks(results)
+                }
             }
         }
     }
 }
 
-private val BOOT_INIT_CHECKS = setOf("ns_pid", "ns_cgroup", "cgroup2")
+@Composable
+private fun FeatureChecks(results: CheckResults) {
+    val states = results.items.associate { it.id to it.state }
+    val initChecks = listOf("ns_pid", "ns_cgroup", "cgroup2")
+    val init = when {
+        initChecks.any { states[it] == CheckState.Missing } -> CheckState.Missing
+        initChecks.all { states[it] == CheckState.Present } -> CheckState.Present
+        else -> CheckState.Unknown
+    }
+    Text(
+        stringResource(
+            when (init) {
+                CheckState.Present -> R.string.check_summary_init_ready
+                CheckState.Missing -> R.string.check_summary_init_needed
+                CheckState.Unknown -> R.string.check_summary_init_unknown
+            },
+        ),
+        style = MaterialTheme.typography.bodyMedium,
+    )
+
+    val bridgeChecks = listOf("config_VETH", "config_BRIDGE", "config_BRIDGE_NETFILTER")
+    val nft = states["config_NF_TABLES"]
+    val nftCompat = states["config_NFT_COMPAT"]
+    val legacy = states["config_NETFILTER_XT_MATCH_ADDRTYPE"]
+    val nftReady = nft == CheckState.Present && nftCompat == CheckState.Present
+    val docker = when {
+        init == CheckState.Missing || !results.isolatedNetwork ||
+            bridgeChecks.any { states[it] == CheckState.Missing } -> R.string.check_summary_docker_bridge_missing
+        (nft == CheckState.Missing || nftCompat == CheckState.Missing) && legacy == CheckState.Missing ->
+            R.string.check_summary_docker_firewall_missing
+        init != CheckState.Present || bridgeChecks.any { states[it] != CheckState.Present } ->
+            R.string.check_summary_docker_unknown
+        nftReady -> R.string.check_summary_docker_ready
+        legacy == CheckState.Present -> R.string.check_summary_docker_legacy
+        else -> R.string.check_summary_docker_unknown
+    }
+    Text(stringResource(docker), style = MaterialTheme.typography.bodyMedium)
+    if (docker == R.string.check_summary_docker_ready || docker == R.string.check_summary_docker_legacy) {
+        if (states["ns_ipc"] == CheckState.Missing || states["config_POSIX_MQUEUE"] == CheckState.Missing) {
+            Text(stringResource(R.string.check_summary_docker_ipc), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
 
 @Composable
 fun CheckGroups(items: List<CheckItem>) {
@@ -248,7 +291,19 @@ private fun CheckRow(item: CheckItem, index: Int, count: Int) {
     }
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { Icon(icon, contentDescription = item.state.name, tint = tint) },
+        leadingContent = {
+            Icon(
+                icon,
+                contentDescription = stringResource(
+                    when (item.state) {
+                        CheckState.Present -> R.string.check_state_present
+                        CheckState.Missing -> R.string.check_state_missing
+                        CheckState.Unknown -> R.string.check_state_unknown
+                    },
+                ),
+                tint = tint,
+            )
+        },
         supportingContent = item.detail?.let { { Text(it) } },
     ) {
         Text(item.label)

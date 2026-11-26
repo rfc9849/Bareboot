@@ -91,7 +91,6 @@ fun SettingsScreen(vm: BarebootViewModel) {
     val version = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
     }
-    val back = { vm.screen = if (vm.tabs.isNotEmpty() && vm.distroRunning) Screen.Terminal else Screen.Home }
     var showExtraKeys by rememberSaveable { mutableStateOf(false) }
     var showThemes by rememberSaveable { mutableStateOf(false) }
     var showFonts by rememberSaveable { mutableStateOf(false) }
@@ -123,7 +122,7 @@ fun SettingsScreen(vm: BarebootViewModel) {
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.label_settings)) },
                 navigationIcon = {
-                    IconButton(onClick = back) {
+                    IconButton(onClick = vm::closeSettings) {
                         Icon(AppIcons.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },

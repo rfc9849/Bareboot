@@ -142,6 +142,9 @@
 
     <!-- Форма установки -->
     <string name="install_catalog_error">Не удалось загрузить список дистрибутивов: %1$s</string>
+    <string name="install_catalog_empty">Сервер не вернул ни одного дистрибутива ARM64. Повторите попытку позже.</string>
+    <string name="install_show_options">Показать параметры установки</string>
+    <string name="install_hide_options">Скрыть параметры установки</string>
     <string name="install_section_distro">Дистрибутив</string>
     <string name="install_rolling_release">Постоянные обновления</string>
     <string name="install_section_version">Версия</string>
@@ -253,6 +256,7 @@
     <string name="diagnostics_report_copied">Отчёт скопирован</string>
     <string name="diagnostics_privacy_note">Отчёт содержит версии Bareboot и Android, версию ядра, отсутствующие опции ядра, список образов и эти журналы. Проверьте его перед отправкой.</string>
     <string name="diagnostics_log_empty">Журнал пуст.</string>
+    <string name="diagnostics_startup_help">Если модуль включён, а служба не запускается после перезагрузки, разрешите ADB Shell доступ к root в менеджере root и выполните на компьютере:\n\n%1$s\n\nЕсли в журнале указано, что SO_PEERPIDFD недоступен, используйте ядро с поддержкой этой опции.</string>
 
     <!-- Первичная настройка -->
     <string name="onboarding_welcome_title">Нативный Linux на телефоне</string>
@@ -324,8 +328,21 @@
     <string name="check_summary_unconfirmed">Совместимость устройства не подтверждена</string>
     <string name="check_summary_ready">Готово к запуску Linux</string>
     <string name="check_summary_missing">Отсутствует: %1$s</string>
-    <string name="check_summary_init_ready">Это ядро также может запускать systemd и Docker в дистрибутиве.</string>
-    <string name="check_summary_init_needed">Для запуска systemd и Docker в ядре требуется CONFIG_PID_NS.</string>
+    <string name="check_summary_init_ready">systemd и OpenRC: включите «Запускать init дистрибутива» в настройках образа.</string>
+    <string name="check_summary_init_needed">Для systemd и OpenRC нужны пространства имён PID и cgroup, а также cgroup v2.</string>
+    <string name="check_summary_init_unknown">systemd и OpenRC: не удалось проверить все требования к ядру.</string>
+    <string name="check_summary_docker_bridge_missing">Для Docker с сетевым мостом нужны init, изолированная сеть и поддержка veth, bridge и bridge netfilter в ядре.</string>
+    <string name="check_summary_docker_firewall_missing">Для Docker с сетевым мостом нужны nftables с поддержкой iptables или iptables-legacy с модулем addrtype.</string>
+    <string name="check_summary_docker_ready">Docker с сетевым мостом: включите init и изолированную сеть в настройках образа.</string>
+    <string name="check_summary_docker_legacy">Docker с сетевым мостом: включите init и изолированную сеть, затем переключите дистрибутив на iptables-legacy.</string>
+    <string name="check_summary_docker_unknown">Docker с сетевым мостом: не удалось проверить все требования к ядру.</string>
+    <string name="check_summary_docker_ipc">Для этого ядра могут понадобиться флаги docker run --ipc host --tmpfs /dev/mqueue.</string>
+    <string name="check_state_present">Доступно</string>
+    <string name="check_state_missing">Недоступно</string>
+    <string name="check_state_unknown">Не проверено</string>
+    <string name="image_stop_confirm_title">Остановить %1$s?</string>
+    <string name="extra_keys_show">Показать остальные клавиши терминала</string>
+    <string name="extra_keys_hide">Скрыть дополнительные клавиши терминала</string>
     <string name="check_group_init_desc">Не требуется для обычных оболочек. Пространства имён PID, cgroup и cgroup v2 позволяют образу запускать собственный init.</string>
     <string name="check_group_containers_desc">Не требуется для обычных оболочек. Docker работает с сетью хоста при запуске systemd; остальные опции добавляют сеть и изоляцию контейнеров.</string>
     <string name="check_available_count">Доступно %1$d из %2$d</string>

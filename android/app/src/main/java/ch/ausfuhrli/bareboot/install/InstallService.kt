@@ -125,6 +125,7 @@ class InstallService : Service() {
             DistroCatalog.download(release, tarFile, { InstallTracker.cancelRequested }) { got, total ->
                 publish(InstallProgress(osLabel, got, total, unpacking = false))
             }
+            if (InstallTracker.cancelRequested) throw InstallCancelledException()
             publish(InstallProgress(osLabel, release.size, release.size, unpacking = true))
             BarebootClient().createDistro(name, sizeGb, tarFile.absolutePath, username, osLabel)
         } finally {
@@ -161,6 +162,7 @@ class InstallService : Service() {
                     }
                 }
             } ?: throw IOException(getString(R.string.install_err_open_file, displayName))
+            if (InstallTracker.cancelRequested) throw InstallCancelledException()
             copy.setReadable(true, false)
             publish(InstallProgress(osLabel, size, size, unpacking = true))
             BarebootClient().createDistro(name, sizeGb, copy.absolutePath, username, osLabel)

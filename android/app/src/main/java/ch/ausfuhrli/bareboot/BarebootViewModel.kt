@@ -83,6 +83,9 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
     val messages = Channel<String>(Channel.BUFFERED)
 
     var screen by mutableStateOf(if (store.onboardingDone) Screen.Home else Screen.Onboarding)
+    private var settingsOrigin = Screen.Home
+    var stopTarget by mutableStateOf<String?>(null)
+        private set
     var service by mutableStateOf<ServiceState>(ServiceState.Checking)
         private set
     var status by mutableStateOf<DaemonStatus?>(null)
@@ -236,6 +239,7 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
     fun loadKernelReport() {
         viewModelScope.launch {
             kernelReportError = null
+            kernelReport = null
             refresh()
             if (service !is ServiceState.Ready) return@launch
             try {
@@ -275,7 +279,31 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
         refresh()
     }
 
-    fun stopDistro(name: String = distroName) = launchAction {
+    fun openSettings() {
+        settingsOrigin = screen
+        screen = Screen.Settings
+    }
+
+    fun closeSettings() {
+        screen = if (settingsOrigin == Screen.Terminal && tabs.isEmpty()) Screen.Home else settingsOrigin
+    }
+
+    fun requestStopDistro(name: String) {
+        val hasShells = tabs.any { it.distro == name } || status?.sessions?.any { it.distro == name } == true
+        if (hasShells) stopTarget = name else stopDistro(name)
+    }
+
+    fun dismissStop() {
+        stopTarget = null
+    }
+
+    fun confirmStop() {
+        val name = stopTarget ?: return
+        dismissStop()
+        stopDistro(name)
+    }
+
+    private fun stopDistro(name: String) = launchAction {
         io { client.stopDistro(name) }
         dropDistroTabs(name)
         RunningNotifier.dismiss(getApplication(), name)
@@ -437,7 +465,7 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadCatalog() {
-        if (catalog != null) return
+        if (!catalog.isNullOrEmpty()) return
         viewModelScope.launch {
             catalogError = null
             try {
@@ -553,6 +581,7 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
     fun finishOnboarding() {
         store.onboardingDone = true
         screen = Screen.Home
+        selectedImage?.let { openTerminal(it.name) }
     }
 
     fun openFromNotification(name: String) {

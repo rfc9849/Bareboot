@@ -94,7 +94,6 @@ fun TerminalScreen(vm: BarebootViewModel) {
                         typeface = typeface,
                         fontSizeSp = vm.fontSizeSp,
                         onFontSizeChanged = vm::setFontSize,
-                        configure = { view -> view.keepScreenOn = true },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 4.dp)
@@ -206,7 +205,7 @@ private fun TerminalTopBar(vm: BarebootViewModel, activeTab: TerminalTab?) {
                     leadingIcon = { Icon(AppIcons.Settings, contentDescription = null) },
                     onClick = {
                         menu = false
-                        vm.screen = Screen.Settings
+                        vm.openSettings()
                     },
                 )
             }

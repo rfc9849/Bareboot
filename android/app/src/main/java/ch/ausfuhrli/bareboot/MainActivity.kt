@@ -10,6 +10,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.luminance
+import androidx.core.view.WindowCompat
 import ch.ausfuhrli.bareboot.notify.RunningNotifier
 import ch.ausfuhrli.bareboot.ui.BarebootApp
 import ch.ausfuhrli.bareboot.ui.theme.BarebootTheme
@@ -22,6 +26,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             BarebootTheme {
+                val darkChrome = if (vm.screen == Screen.Terminal) {
+                    vm.currentTheme.chromeColor.luminance() < 0.18f
+                } else {
+                    isSystemInDarkTheme()
+                }
+                SideEffect {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !darkChrome
+                        isAppearanceLightNavigationBars = !darkChrome
+                    }
+                }
                 BarebootApp(vm)
             }
         }

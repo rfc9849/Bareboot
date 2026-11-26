@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -277,6 +278,12 @@ private fun ServiceStep(vm: BarebootViewModel, onNext: () -> Unit) {
                     stringResource(R.string.onboarding_step_return),
                 )
             )
+            SelectionContainer {
+                Text(
+                    stringResource(R.string.diagnostics_startup_help, stringResource(R.string.diagnostics_startup_command)),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                )
+            }
         }
         ServiceState.Unauthorized -> StepLayout(
             title = stringResource(R.string.onboarding_service_unauth_title),
@@ -419,12 +426,16 @@ private fun DistroStep(vm: BarebootViewModel) {
                     },
                     enabled = choice != null && vm.service is ServiceState.Ready,
                 ) { Text(stringResource(R.string.action_install)) }
-                else -> Button(onClick = vm::finishOnboarding) { Text(stringResource(R.string.action_done)) }
+                else -> Button(onClick = vm::finishOnboarding) { Text(stringResource(R.string.home_open_terminal)) }
             }
         },
     ) {
         when {
-            progress != null -> InstallProgressCard(progress, Modifier.padding(horizontal = 16.dp))
+            progress != null -> InstallProgressCard(
+                progress,
+                Modifier.padding(horizontal = 16.dp),
+                onCancel = if (progress.unpacking) null else vm::cancelInstall,
+            )
             installed.isEmpty() -> InstallForm(vm, form)
             else -> SegmentedColumn {
                 installed.forEachIndexed { index, img ->

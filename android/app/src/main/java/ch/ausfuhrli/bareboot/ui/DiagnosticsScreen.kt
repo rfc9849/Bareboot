@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import ch.ausfuhrli.bareboot.BarebootViewModel
 import ch.ausfuhrli.bareboot.R
 import ch.ausfuhrli.bareboot.Screen
+import ch.ausfuhrli.bareboot.ServiceState
 import kotlinx.coroutines.launch
 
 private data class LogSource(val title: String, val distro: String, val name: String)
@@ -64,9 +65,11 @@ fun DiagnosticsScreen(vm: BarebootViewModel) {
     var text by rememberSaveable { mutableStateOf("") }
     val source = sources.getOrElse(selected) { sources.first() }
     val loadingText = stringResource(R.string.diagnostics_loading)
-    LaunchedEffect(source, reload) {
+    val startupHelp = stringResource(R.string.diagnostics_startup_help, stringResource(R.string.diagnostics_startup_command))
+    LaunchedEffect(source, reload, vm.service) {
         text = loadingText
-        text = vm.readLog(source.distro, source.name)
+        text = if (source.name == "daemon" && vm.service == ServiceState.NotRunning) startupHelp
+            else vm.readLog(source.distro, source.name)
     }
     Scaffold(
         topBar = {
@@ -78,7 +81,7 @@ fun DiagnosticsScreen(vm: BarebootViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { reload++ }) {
+                    IconButton(onClick = { vm.refreshAsync(); reload++ }) {
                         Icon(AppIcons.Refresh, contentDescription = stringResource(R.string.action_reload))
                     }
                 },

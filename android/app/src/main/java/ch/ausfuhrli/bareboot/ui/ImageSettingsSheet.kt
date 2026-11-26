@@ -87,7 +87,7 @@ fun ImageSettingsSheet(
                 stringResource(R.string.image_stop_desc, image.name),
                 { Icon(AppIcons.StopCircle, null) },
                 idle,
-                onClick = close { vm.stopDistro(image.name) },
+                onClick = close { vm.requestStopDistro(image.name) },
             )
         } else {
             null

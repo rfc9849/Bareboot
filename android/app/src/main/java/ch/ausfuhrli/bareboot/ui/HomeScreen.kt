@@ -96,6 +96,7 @@ fun HomeScreen(vm: BarebootViewModel) {
     val selected = vm.selectedImage
     val ready = vm.service is ServiceState.Ready
     val cards = listOfNotNull(selected) + vm.images.filter { it.name != selected?.name && vm.isRunning(it.name) }
+    val otherImages = vm.images.filter { image -> cards.none { it.name == image.name } }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -104,7 +105,7 @@ fun HomeScreen(vm: BarebootViewModel) {
                 title = { Text(stringResource(R.string.app_name)) },
                 subtitle = { Text(serviceSummary(LocalContext.current, vm)) },
                 actions = {
-                    IconButton(onClick = { vm.screen = Screen.Settings }) {
+                    IconButton(onClick = vm::openSettings) {
                         Icon(AppIcons.Settings, contentDescription = stringResource(R.string.label_settings))
                     }
                 },
@@ -149,9 +150,9 @@ fun HomeScreen(vm: BarebootViewModel) {
                 }
             }
             if (vm.images.isNotEmpty()) {
-                item { SectionHeader(stringResource(R.string.home_section_images)) }
-                val count = vm.images.size + 1
-                itemsIndexed(vm.images, key = { _, img -> img.name }) { index, img ->
+                if (otherImages.isNotEmpty()) item { SectionHeader(stringResource(R.string.home_section_images)) }
+                val count = otherImages.size + 1
+                itemsIndexed(otherImages, key = { _, img -> img.name }) { index, img ->
                     ImageRow(vm, img, index, count)
                 }
                 item {
@@ -380,7 +381,7 @@ private fun DistroCard(
                 }
                 if (running) {
                     FilledTonalButton(
-                        onClick = { vm.stopDistro(image.name) },
+                        onClick = { vm.requestStopDistro(image.name) },
                         enabled = !vm.busy,
                         contentPadding = ButtonDefaults.MediumContentPadding,
                     ) {
@@ -510,30 +511,30 @@ private fun AddDistroSheet(vm: BarebootViewModel, onDismiss: () -> Unit) {
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         sheetGesturesEnabled = false,
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Text(
-                stringResource(R.string.home_add_distribution),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            SectionHeader(stringResource(R.string.home_from_file))
-            SegmentedColumn {
-                SegmentedListItem(
-                    onClick = { picker.launch(arrayOf("*/*")) },
-                    enabled = vm.install == null,
-                    shapes = ListItemDefaults.segmentedShapes(0, 1),
-                    colors = listRowColors(),
-                    leadingContent = { Icon(AppIcons.UploadFile, contentDescription = null) },
-                    supportingContent = {
-                        Text(stringResource(R.string.home_import_file_desc))
-                    },
-                ) { Text(stringResource(R.string.home_import_file)) }
+        Column(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    stringResource(R.string.home_add_distribution),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                InstallForm(vm, form)
+                SectionHeader(stringResource(R.string.home_from_file))
+                SegmentedColumn {
+                    SegmentedListItem(
+                        onClick = { picker.launch(arrayOf("*/*")) },
+                        enabled = vm.install == null,
+                        shapes = ListItemDefaults.segmentedShapes(0, 1),
+                        colors = listRowColors(),
+                        leadingContent = { Icon(AppIcons.UploadFile, contentDescription = null) },
+                        supportingContent = { Text(stringResource(R.string.home_import_file_desc)) },
+                    ) { Text(stringResource(R.string.home_import_file)) }
+                }
             }
-            InstallForm(vm, form)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
