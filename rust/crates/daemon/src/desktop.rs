@@ -18,6 +18,9 @@ use std::{
 const SOCKET: &str = "wayland-0";
 const DISPLAY_UID: u32 = 65534;
 const GUEST_GROUP: u32 = runtime::validate::ANDROID_MEDIA_GID;
+const APP_PROCESS: &str = "/system/bin/app_process64";
+const SCREEN_CLASSES: &str = "bareboot-screen.apk";
+const SCREEN_HOST: &str = "ch.ausfuhrli.bareboot.screen.ScreenHost";
 
 pub struct Desktop {
     pub dir: PathBuf,
@@ -26,6 +29,7 @@ pub struct Desktop {
     presentation: Option<OwnedFd>,
     encoder: Option<OwnedFd>,
     cpu_boost: Option<OwnedFd>,
+    screen: Option<Child>,
 }
 
 impl Desktop {
@@ -52,6 +56,7 @@ impl Desktop {
             presentation: None,
             encoder: None,
             cpu_boost: cpu_boost.map(OwnedFd::from),
+            screen: None,
         };
         super::linux_impl::set_selinux_label(&endpoint.dir, "u:object_r:bareboot_display_socket:s0")?;
         chown(&endpoint.dir, Some(DISPLAY_UID), Some(GUEST_GROUP))?;
@@ -84,6 +89,57 @@ impl Desktop {
         let control = &self.compositor.as_ref().unwrap().1;
         protocol::send_frame(control.as_raw_fd(), &[0], Some(display.as_raw_fd()))?;
         Ok(viewer.into())
+    }
+
+    pub fn show_screen(&mut self, name: &str, display_id: u32) -> io::Result<()> {
+        let classes = std::env::current_exe()?.with_file_name(SCREEN_CLASSES);
+        if !fs::symlink_metadata(&classes)
+            .is_ok_and(|m| m.is_file() && m.uid() == 0 && m.mode() & 0o022 == 0)
+        {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "the screen host is not installed"));
+        }
+        if let Some(mut old) = self.screen.take() {
+            let _ = old.kill();
+            let _ = old.wait();
+        }
+        let view = self.attach()?;
+        let view_arg = view.as_raw_fd().to_string();
+        let mut command = Command::new(APP_PROCESS);
+        command
+            .env("CLASSPATH", &classes)
+            .arg("/system/bin")
+            .arg(SCREEN_HOST)
+            .arg(name)
+            .arg(display_id.to_string())
+            .arg(&view_arg)
+            .current_dir("/")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        unsafe {
+            command.pre_exec(move || {
+                let ctx = b"u:r:bareboot_screen:s0\0";
+                let attr = libc::open(
+                    c"/proc/thread-self/attr/exec".as_ptr(),
+                    libc::O_WRONLY | libc::O_CLOEXEC,
+                );
+                if attr < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                let n = libc::write(attr, ctx.as_ptr().cast(), ctx.len());
+                let error = io::Error::last_os_error();
+                libc::close(attr);
+                if n != ctx.len() as isize {
+                    return Err(error);
+                }
+                if libc::setsid() < 0 || libc::fcntl(view.as_raw_fd(), libc::F_SETFD, 0) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        self.screen = Some(command.spawn()?);
+        Ok(())
     }
 
     fn start(&mut self) -> io::Result<()> {
@@ -217,6 +273,10 @@ fn duplicate(fd: &impl AsRawFd) -> io::Result<OwnedFd> {
 
 impl Drop for Desktop {
     fn drop(&mut self) {
+        if let Some(mut child) = self.screen.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
         if let Some((mut child, _)) = self.compositor.take() {
             let _ = child.kill();
             let _ = child.wait();

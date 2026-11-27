@@ -1,6 +1,8 @@
 set_perm "$MODPATH/bin/bareboot" 0 0 0755
 set_perm "$MODPATH/bin/bareboot-display" 0 0 0755
 set_perm "$MODPATH/bin/slirp4netns" 0 0 0755
+set_perm "$MODPATH/bin/bareboot-screen.apk" 0 0 0644
+set_perm "$MODPATH/bin/libbareboot_screen.so" 0 0 0644
 if [ -f "$MODPATH/gpu/host/kumquat" ]; then
     set_perm "$MODPATH/gpu/host/kumquat" 0 0 0755
     set_perm "$MODPATH/gpu/host/bareboot-media" 0 0 0755

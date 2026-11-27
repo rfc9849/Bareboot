@@ -56,6 +56,9 @@
     <string name="home_settings_for_image">Settings for %1$s</string>
     <string name="home_open_terminal">Open terminal</string>
     <string name="home_start_and_open_terminal">Start and open terminal</string>
+    <string name="home_open_desktop">Show %1$s on the external monitor</string>
+    <string name="msg_connect_monitor">Connect a monitor over USB-C and choose the desktop option, then try again.</string>
+    <string name="msg_screen_started">%1$s is on the external monitor. Press Ctrl+Alt+Backspace to give the monitor back to Android.</string>
     <string name="home_busy_export">Backing up</string>
     <string name="home_busy_resize">Enlarging storage</string>
     <string name="home_busy_create">Setting up</string>

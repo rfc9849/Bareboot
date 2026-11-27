@@ -163,6 +163,10 @@ pub enum Request {
         name: String,
     },
     AttachDesktop { name: String },
+    StartScreen {
+        name: String,
+        display_id: u32,
+    },
     ConfigureGpu {
         name: String,
         enabled: bool,
@@ -547,6 +551,11 @@ pub fn encode_request(req: &Request) -> io::Result<Vec<u8>> {
             w.u8(23);
             w.str(name)?;
         }
+        Request::StartScreen { name, display_id } => {
+            w.u8(24);
+            w.str(name)?;
+            w.u32(*display_id);
+        }
         Request::ConfigureGpu { name, enabled } => {
             w.u8(22);
             w.str(name)?;
@@ -645,6 +654,10 @@ pub fn decode_request(data: &[u8]) -> io::Result<Request> {
             name: r.str()?,
         },
         23 => Request::AttachDesktop { name: r.str()? },
+        24 => Request::StartScreen {
+            name: r.str()?,
+            display_id: r.u32()?,
+        },
         22 => Request::ConfigureGpu {
             name: r.str()?,
             enabled: r.bool()?,
@@ -1015,6 +1028,7 @@ mod tests {
             },
             Request::ConfigureGpu { name: "debian".into(), enabled: true },
             Request::AttachDesktop { name: "debian".into() },
+            Request::StartScreen { name: "debian".into(), display_id: 7 },
         ];
         for req in cases {
             let bytes = encode_request(&req).unwrap();

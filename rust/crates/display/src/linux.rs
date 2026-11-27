@@ -146,6 +146,7 @@ struct Surface {
     pending_source: Option<Option<[f64; 4]>>,
     input: Option<Rects>,
     pending_input: Option<Option<Rects>>,
+    fullscreen: bool,
 }
 
 type Rects = Vec<(i32, i32, i32, i32)>;
@@ -363,6 +364,7 @@ struct State {
     display: DisplayHandle,
     data_devices: Vec<wl_data_device::WlDataDevice>,
     selection: Option<wl_data_source::WlDataSource>,
+    cursor: Option<(wl_surface::WlSurface, i32, i32)>,
 }
 
 fn keymap() -> io::Result<(File, u32)> {
@@ -402,6 +404,10 @@ impl State {
     fn next_serial(&mut self) -> u32 {
         self.serial = self.serial.wrapping_add(1).max(1);
         self.serial
+    }
+
+    fn fullscreen_size(&self) -> (i32, i32) {
+        if self.output_w > 0 && self.output_h > 0 { (self.output_w, self.output_h) } else { (WIDTH, HEIGHT) }
     }
 
     fn next_layer_id(&mut self) -> u32 {
@@ -672,7 +678,23 @@ impl Dispatch<wl_region::WlRegion, Mutex<Vec<(i32, i32, i32, i32)>>> for State {
 }
 noop!(wl_callback::WlCallback, ());
 noop!(wl_buffer::WlBuffer, Buffer);
-noop!(wl_pointer::WlPointer, ());
+impl Dispatch<wl_pointer::WlPointer, ()> for State {
+    fn request(
+        state: &mut Self,
+        _: &Client,
+        _: &wl_pointer::WlPointer,
+        request: wl_pointer::Request,
+        _: &(),
+        _: &DisplayHandle,
+        _: &mut DataInit<'_, Self>,
+    ) {
+        if let wl_pointer::Request::SetCursor { surface, hotspot_x, hotspot_y, .. } = request {
+            state.remote_cursor(surface.is_some());
+            state.cursor = surface.map(|s| (s, hotspot_x, hotspot_y));
+            state.remote_cursor_image();
+        }
+    }
+}
 noop!(wl_keyboard::WlKeyboard, ());
 noop!(wl_touch::WlTouch, ());
 noop!(wl_output::WlOutput, ());
@@ -1002,7 +1024,15 @@ impl Dispatch<wl_surface::WlSurface, Mutex<Surface>> for State {
                             return;
                         }
                         let serial = state.next_serial();
-                        top.configure(0, 0, Vec::new());
+                        if surface.fullscreen {
+                            let (width, height) = state.fullscreen_size();
+                            top.configure(width, height, (xdg_toplevel::State::Fullscreen as u32).to_ne_bytes().to_vec());
+                        } else if state.remote.as_ref().is_some_and(remote::Remote::layers) {
+                            let (width, height) = state.fullscreen_size();
+                            top.configure(width, height, (xdg_toplevel::State::Maximized as u32).to_ne_bytes().to_vec());
+                        } else {
+                            top.configure(0, 0, Vec::new());
+                        }
                         surface.configure_xdg(serial);
                     } else if let Some(popup) = &surface.popup {
                         if matches!(surface.pending, Some(Some(_))) {
@@ -1136,6 +1166,9 @@ impl Dispatch<wl_surface::WlSurface, Mutex<Surface>> for State {
                 }
                 if !sync {
                     state.remote_dirty(resource);
+                }
+                if state.cursor.as_ref().is_some_and(|(s, _, _)| s == resource) {
+                    state.remote_cursor_image();
                 }
             }
             _ => {}
@@ -1686,7 +1719,7 @@ pub fn run() -> io::Result<()> {
     handle.create_global::<State, wayland_protocols::wp::viewporter::server::wp_viewporter::WpViewporter, _>(1, ());
     if direct.is_some() {
         handle.create_global::<State, direct::bareboot_ahb_v1::BarebootAhbV1, _>(1, ());
-        handle.create_global::<State, wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, _>(3, ());
+        handle.create_global::<State, wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, _>(4, ());
     }
     let (keymap, keymap_size) = keymap()?;
     let mut state = State {
@@ -1715,6 +1748,7 @@ pub fn run() -> io::Result<()> {
         display: handle.clone(),
         data_devices: Vec::new(),
         selection: None,
+        cursor: None,
     };
     let mut last_frame = Instant::now();
     loop {

@@ -44,6 +44,7 @@ fn usage() {
            shell <name> [--uid N] [--gid N] [-- <cmd...>]\n  \
            attach <session_id>\n  \
            display <name>\n  \
+           screen <name> <display_id>\n  \
            sessions\n  \
            kill <session_id> [signal]"
     );
@@ -612,6 +613,13 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             };
             expect_ok(send_rpc(&stream, &Request::StopDistro { name }))
+        }
+        "screen" => {
+            let (Some(name), Some(display_id), None) = (args.next(), args.next().and_then(|v| v.parse().ok()), args.next()) else {
+                usage();
+                return ExitCode::from(2);
+            };
+            expect_ok(send_rpc(&stream, &Request::StartScreen { name, display_id }))
         }
         "display" => {
             let (Some(name), None) = (args.next(), args.next()) else {

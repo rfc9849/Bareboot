@@ -1,5 +1,7 @@
 package ch.ausfuhrli.bareboot.ui
 
+import android.hardware.display.DisplayManager
+import android.view.Display
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -379,6 +381,17 @@ private fun DistroCard(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(if (running) R.string.home_open_terminal else R.string.home_start_and_open_terminal))
                 }
+                FilledTonalButton(
+                    onClick = { vm.openScreen(image.name, externalDisplayId(context)) },
+                    enabled = !vm.busy && !working && vm.service is ServiceState.Ready,
+                    contentPadding = ButtonDefaults.MediumContentPadding,
+                ) {
+                    Icon(
+                        AppIcons.Desktop,
+                        contentDescription = stringResource(R.string.home_open_desktop, image.name),
+                        modifier = Modifier.size(ButtonDefaults.MediumIconSize),
+                    )
+                }
                 if (running) {
                     FilledTonalButton(
                         onClick = { vm.requestStopDistro(image.name) },
@@ -392,6 +405,11 @@ private fun DistroCard(
         }
     }
 }
+
+private fun externalDisplayId(context: Context): Int? =
+    context.getSystemService(DisplayManager::class.java).displays.firstOrNull {
+        it.displayId != Display.DEFAULT_DISPLAY && it.flags and Display.FLAG_PRIVATE == 0
+    }?.displayId
 
 fun busyText(context: Context, image: ImageInfo): String? = when (image.busy) {
     "" -> null

@@ -464,6 +464,8 @@ allow bareboot_display bareboot_display fd use
 allow bareboot_display bareboot_display dir { getattr search }
 allow bareboot_display bareboot_display lnk_file read
 allow bareboot_display null_device chr_file { getattr open read write }
+allow bareboot_display device dir search
+allow bareboot_display gpu_device chr_file getattr
 allow bareboot_display bareboot_guest fd use
 allow bareboot_display bareboot_guest fifo_file { read write getattr }
 allow bareboot_display tmpfs file { getattr read write }
@@ -472,3 +474,124 @@ type_transition bareboot_display tmpfs file bareboot_display_mem
 allow bareboot_display bareboot_display_mem file { create getattr open read write setattr }
 allow bareboot_guest bareboot_display fd use
 allow bareboot_guest bareboot_display_mem file { getattr read write map }
+
+type bareboot_screen domain
+enforce bareboot_screen
+typeattribute bareboot_screen mlstrustedsubject
+type bareboot_screen_file file_type
+
+allow bareboot_screen_file labeledfs filesystem associate
+allow bareboot_daemon bareboot_screen process { transition signal sigkill signull rlimitinh siginh noatsecure }
+allow bareboot_daemon bareboot_screen process2 nosuid_transition
+allow bareboot_daemon zygote_exec file { getattr open read execute map }
+allow bareboot_daemon bareboot_screen_file file getattr
+allow bareboot_screen zygote_exec file { entrypoint getattr open read execute map }
+allow bareboot_screen bareboot_screen_file file { getattr open read map execute }
+allow bareboot_screen adb_data_file dir { getattr search }
+allow bareboot_screen bareboot_daemon process sigchld
+allow bareboot_screen bareboot_daemon fd use
+allow bareboot_screen bareboot_daemon unix_stream_socket { read write getattr getopt setopt shutdown }
+allow bareboot_screen bareboot_screen process { fork getsched setsched signal sigkill execmem }
+allow bareboot_screen bareboot_screen dir { getattr search open read }
+allow bareboot_screen bareboot_screen file { getattr open read }
+allow bareboot_screen bareboot_screen lnk_file { getattr read }
+allow bareboot_screen bareboot_screen fifo_file { getattr read write }
+allow bareboot_screen bareboot_screen unix_stream_socket { create connect read write getattr getopt setopt shutdown }
+allow bareboot_screen bareboot_screen unix_dgram_socket { create connect read write getattr getopt setopt shutdown }
+allow bareboot_screen tmpfs file { getattr read write map execute }
+allow bareboot_screen apex_art_data_file dir { getattr search }
+allow bareboot_screen apex_art_data_file file { getattr open read map }
+allow bareboot_screen binder_device chr_file { getattr open read write ioctl map }
+allow bareboot_screen dmabuf_system_heap_device chr_file { getattr open read ioctl }
+allow bareboot_screen gpu_device chr_file { getattr open read write ioctl map }
+allow bareboot_screen input_device dir { getattr search open read }
+allow bareboot_screen input_device chr_file { getattr open read ioctl }
+allow bareboot_screen sysfs dir { getattr search open read }
+allow bareboot_screen sysfs file { getattr open read }
+allow bareboot_screen sysfs lnk_file { getattr read }
+allow bareboot_screen servicemanager binder { call transfer }
+allow bareboot_screen system_server binder { call transfer }
+allow bareboot_screen surfaceflinger binder { call transfer }
+allow bareboot_screen mediaserver binder { call transfer }
+allow bareboot_screen mediacodec_google binder { call transfer }
+allow bareboot_screen hal_graphics_allocator_default binder { call transfer }
+allow bareboot_screen hal_graphics_composer_default binder { call transfer }
+allow servicemanager bareboot_screen binder { call transfer }
+allow system_server bareboot_screen binder { call transfer }
+allow surfaceflinger bareboot_screen binder { call transfer }
+allow mediaserver bareboot_screen binder { call transfer }
+allow mediacodec_google bareboot_screen binder { call transfer }
+allow hal_graphics_allocator_default bareboot_screen binder { call transfer }
+allow hal_graphics_composer_default bareboot_screen binder { call transfer }
+allow servicemanager bareboot_screen fd use
+allow system_server bareboot_screen fd use
+allow surfaceflinger bareboot_screen fd use
+allow mediaserver bareboot_screen fd use
+allow mediacodec_google bareboot_screen fd use
+allow hal_graphics_allocator_default bareboot_screen fd use
+allow hal_graphics_composer_default bareboot_screen fd use
+allow servicemanager bareboot_screen dir search
+allow system_server bareboot_screen dir search
+allow surfaceflinger bareboot_screen dir search
+allow servicemanager bareboot_screen file { getattr open read }
+allow system_server bareboot_screen file { getattr open read }
+allow surfaceflinger bareboot_screen file { getattr open read }
+allow servicemanager bareboot_screen process getattr
+allow system_server bareboot_screen process getattr
+allow surfaceflinger bareboot_screen process getattr
+allow bareboot_screen surfaceflinger fd use
+allow bareboot_screen mediacodec_google fd use
+allow bareboot_screen hal_graphics_allocator_default fd use
+allow bareboot_screen hal_graphics_composer_default fd use
+allow bareboot_screen activity_service service_manager find
+allow bareboot_screen display_service service_manager find
+allow bareboot_screen power_service service_manager find
+allow bareboot_screen surfaceflinger_service service_manager find
+allow bareboot_screen hint_service service_manager find
+allow bareboot_screen mediaserver_service service_manager find
+allow bareboot_screen mediametrics_service service_manager find
+allow bareboot_screen media_quality_service service_manager find
+allow bareboot_screen hal_codec2_service service_manager find
+allow bareboot_screen hal_graphics_allocator_service service_manager find
+allow bareboot_screen hal_graphics_mapper_service service_manager find
+allow bareboot_screen dalvik_runtime_prop file { getattr open read map }
+allow bareboot_screen userdebug_or_eng_prop file { getattr open read map }
+allow bareboot_screen property_type file { getattr open read map }
+allow bareboot_screen properties_device dir { getattr search open read }
+allow bareboot_screen properties_serial file { getattr open read map }
+allow bareboot_screen system_data_file dir { getattr search }
+allow bareboot_screen system_data_root_file dir { getattr search }
+allow bareboot_screen apex_module_data_file dir { getattr search }
+allow bareboot_screen system_file dir { getattr open read search }
+allow bareboot_screen system_file file { getattr open read execute map }
+allow bareboot_screen system_file lnk_file { getattr read }
+allow bareboot_screen system_lib_file dir { getattr open read search }
+allow bareboot_screen system_lib_file file { getattr open read execute map }
+allow bareboot_screen system_linker_exec file { getattr open read execute map }
+allow bareboot_screen linkerconfig_file dir { getattr search }
+allow bareboot_screen linkerconfig_file file { getattr open read map }
+allow bareboot_screen vendor_file dir { getattr open read search }
+allow bareboot_screen same_process_hal_file dir { getattr open read search }
+allow bareboot_screen vendor_file file { getattr open read execute map }
+allow bareboot_screen same_process_hal_file file { getattr open read execute map }
+allow bareboot_screen vendor_file lnk_file { getattr read }
+allow bareboot_screen same_process_hal_file lnk_file { getattr read }
+allow bareboot_screen rootfs dir { getattr search open read }
+allow bareboot_screen device dir { getattr search open read }
+allow bareboot_screen apex_mnt_dir dir { getattr search open read }
+allow bareboot_screen rootfs lnk_file { getattr read }
+allow bareboot_screen proc dir { getattr search open read }
+allow bareboot_screen proc file { getattr open read }
+allow bareboot_screen proc lnk_file { getattr read }
+allow bareboot_screen dalvikcache_data_file dir { getattr search open read }
+allow bareboot_screen apex_art_data_file dir { getattr search open read }
+allow bareboot_screen dalvikcache_data_file file { getattr open read map }
+allow bareboot_screen null_device chr_file { getattr open read write }
+allow bareboot_screen logdw_socket sock_file write
+allow bareboot_screen logd unix_dgram_socket sendto
+allow bareboot_screen bareboot_screen anon_inode { create read write ioctl map getattr }
+allow bareboot_screen apex_info_file file { getattr open read map }
+allow bareboot_screen apex_art_data_file file execute
+allow bareboot_screen bareboot_screen process getcap
+allow bareboot_screen surfaceflinger unix_stream_socket { read write getattr getopt setopt }
+allow surfaceflinger bareboot_screen unix_stream_socket { read write getattr getopt setopt }

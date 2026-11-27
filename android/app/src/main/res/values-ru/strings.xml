@@ -56,6 +56,9 @@
     <string name="home_settings_for_image">Настройки %1$s</string>
     <string name="home_open_terminal">Открыть терминал</string>
     <string name="home_start_and_open_terminal">Запустить и открыть терминал</string>
+    <string name="home_open_desktop">Показать %1$s на внешнем мониторе</string>
+    <string name="msg_connect_monitor">Подключите монитор по USB-C, выберите режим «Компьютер» и попробуйте снова.</string>
+    <string name="msg_screen_started">%1$s на внешнем мониторе. Ctrl+Alt+Backspace вернёт монитор Android.</string>
     <string name="home_busy_export">Резервное копирование</string>
     <string name="home_busy_resize">Увеличение образа</string>
     <string name="home_busy_create">Настройка</string>

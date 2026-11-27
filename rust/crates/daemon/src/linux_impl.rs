@@ -633,6 +633,21 @@ impl DaemonState {
                     }
                 }
             }
+            Request::StartScreen { name, display_id } => {
+                let Some(entry) = self.distros.get_mut(&name) else {
+                    return (err_resp(libc::ENOENT as u32, "start the distribution first".into()), None);
+                };
+                let Some(display) = &mut entry.desktop else {
+                    return (err_resp(libc::ENOTSUP as u32, "display is unavailable for this distribution".into()), None);
+                };
+                match display.show_screen(&name, display_id) {
+                    Ok(()) => (Response::Ok, None),
+                    Err(e) => {
+                        log_event(&format!("could not show {name} on display {display_id}: {e}"));
+                        (err_resp(libc::EIO as u32, e.to_string()), None)
+                    }
+                }
+            }
             Request::ConfigureGpu { name, enabled } => {
                 if let Err(e) = validate_distro_name(&name) {
                     return (err_resp(libc::EINVAL as u32, e.to_string()), None);

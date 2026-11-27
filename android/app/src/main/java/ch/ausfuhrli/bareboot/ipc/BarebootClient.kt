@@ -93,7 +93,7 @@ class BarebootRpcException(val code: Int, message: String) : IOException(message
 
 class DaemonUnavailableException(cause: IOException) : IOException(cause.message, cause)
 
-const val PROTOCOL_VERSION = 18
+const val PROTOCOL_VERSION = 19
 const val DEFAULT_SOCKET_PATH = "/dev/socket/bareboot/barebootd.sock"
 
 class BarebootClient(
@@ -400,6 +400,15 @@ class BarebootClient(
             sock.close()
             throw e
         }
+    }
+
+    fun startScreen(name: String, displayId: Int) {
+        val w = FrameWriter().apply {
+            u8(24)
+            str(name)
+            u32(displayId)
+        }
+        call(w.toByteArray()) { r -> expectOk(r) }
     }
 
     private fun connect(): LocalSocket {

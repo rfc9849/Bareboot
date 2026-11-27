@@ -261,3 +261,6 @@ allow mediaserver bareboot_media fd use
 allow bareboot_media mediametrics_service service_manager find
 allow bareboot_media mediametrics binder { call transfer }
 allow mediametrics bareboot_media binder transfer
+allow bareboot_screen bareboot_gpu_renderer fd use
+allow surfaceflinger bareboot_gpu_renderer fd use
+allow hal_graphics_composer_default bareboot_gpu_renderer fd use

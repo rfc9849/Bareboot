@@ -15,6 +15,7 @@ object AppIcons {
     val Coffee: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_coffee)
     val ContentPaste: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_content_paste)
     val Delete: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_delete)
+    val Desktop: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_desktop)
     val Done: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_done)
     val Edit: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_edit)
     val Error: ImageVector @Composable get() = ImageVector.vectorResource(R.drawable.ic_error)

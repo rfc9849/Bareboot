@@ -4,12 +4,12 @@ use std::{
     fs::File,
     io,
     os::{
-        fd::{AsRawFd, OwnedFd},
+        fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
         unix::fs::MetadataExt,
     },
 };
 use wayland_protocols::wp::linux_dmabuf::zv1::server::{
-    zwp_linux_buffer_params_v1, zwp_linux_dmabuf_v1,
+    zwp_linux_buffer_params_v1, zwp_linux_dmabuf_feedback_v1, zwp_linux_dmabuf_v1,
 };
 use wayland_server::{
     Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource, protocol::wl_buffer,
@@ -75,7 +75,15 @@ impl Buffer {
 
 enum Release {
     Encoder,
+    Viewer,
     Fence(OwnedFd),
+}
+
+pub(super) struct Hold {
+    pub id: u32,
+    pub metadata: Vec<u8>,
+    pub fds: Vec<OwnedFd>,
+    pub fence: Option<OwnedFd>,
 }
 
 struct Flight {
@@ -301,6 +309,40 @@ impl Direct {
         }
     }
 
+    pub fn hold(&mut self, buffer: wl_buffer::WlBuffer, fence: Option<OwnedFd>) -> io::Result<Hold> {
+        if self.flights.len() >= LIMIT || self.flights.iter().any(|f| f.buffer == buffer) {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        let image = buffer.data::<Buffer>().ok_or(io::ErrorKind::InvalidData)?;
+        if image.fds.is_empty() {
+            buffer.release();
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        let fds = image.fds.iter().map(OwnedFd::try_clone).collect::<io::Result<Vec<_>>>()?;
+        let metadata = image.metadata.clone();
+        self.serial = self.serial.wrapping_add(1);
+        let id = self.serial;
+        self.flights.push(Flight { id, buffer, release: Release::Viewer });
+        Ok(Hold { id, metadata, fds, fence })
+    }
+
+    pub fn release_flight(&mut self, id: u32) {
+        if let Some(index) = self.flights.iter().position(|f| f.id == id && matches!(f.release, Release::Viewer)) {
+            self.flights.swap_remove(index).buffer.release();
+        }
+    }
+
+    pub fn release_viewer(&mut self) {
+        self.flights.retain(|flight| {
+            if matches!(flight.release, Release::Viewer) {
+                flight.buffer.release();
+                false
+            } else {
+                true
+            }
+        });
+    }
+
     pub fn tick(&mut self, mut on_video: impl FnMut(u32, Vec<u8>)) {
         if let Some(ref enc) = self.encoder {
             let mut buf = vec![0u8; 64 * 1024];
@@ -356,7 +398,7 @@ impl Direct {
             }
         }
         self.flights.retain(|flight| match &flight.release {
-            Release::Encoder => true,
+            Release::Encoder | Release::Viewer => true,
             Release::Fence(fence) => {
                 let events = poll(fence);
                 if events & libc::POLLIN != 0 && events & libc::POLLERR == 0 {
@@ -504,6 +546,9 @@ impl GlobalDispatch<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, ()> for State {
         init: &mut DataInit<'_, Self>,
     ) {
         let dmabuf = init.init(resource, ());
+        if dmabuf.version() >= 4 {
+            return;
+        }
         for format in DMABUF_FORMATS {
             if dmabuf.version() >= 3 {
                 dmabuf.modifier(format, (MOD_LINEAR >> 32) as u32, MOD_LINEAR as u32);
@@ -524,10 +569,71 @@ impl Dispatch<zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1, ()> for State {
         _: &DisplayHandle,
         init: &mut DataInit<'_, Self>,
     ) {
-        if let zwp_linux_dmabuf_v1::Request::CreateParams { params_id } = request {
-            init.init(params_id, DmabufParams::default());
+        match request {
+            zwp_linux_dmabuf_v1::Request::CreateParams { params_id } => {
+                init.init(params_id, DmabufParams::default());
+            }
+            zwp_linux_dmabuf_v1::Request::GetDefaultFeedback { id }
+            | zwp_linux_dmabuf_v1::Request::GetSurfaceFeedback { id, .. } => {
+                let feedback = init.init(id, ());
+                send_feedback(&feedback);
+            }
+            _ => {}
         }
     }
+}
+
+impl Dispatch<zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1, ()> for State {
+    fn request(
+        _: &mut Self,
+        _: &Client,
+        _: &zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1,
+        _: zwp_linux_dmabuf_feedback_v1::Request,
+        _: &(),
+        _: &DisplayHandle,
+        _: &mut DataInit<'_, Self>,
+    ) {
+    }
+}
+
+fn render_device() -> Option<u64> {
+    (128..192).find_map(|minor| std::fs::metadata(format!("/dev/dri/renderD{minor}")).ok().map(|m| m.rdev()))
+}
+
+fn format_table() -> io::Result<(File, u32)> {
+    let table: Vec<u8> = DMABUF_FORMATS
+        .iter()
+        .flat_map(|format| {
+            let mut entry = [0u8; 16];
+            entry[..4].copy_from_slice(&format.to_ne_bytes());
+            entry[8..].copy_from_slice(&MOD_LINEAR.to_ne_bytes());
+            entry
+        })
+        .collect();
+    let fd = unsafe { libc::memfd_create(c"bareboot-dmabuf-formats".as_ptr(), libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut file = unsafe { File::from_raw_fd(fd) };
+    io::Write::write_all(&mut file, &table)?;
+    let seals = libc::F_SEAL_SEAL | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_WRITE;
+    if unsafe { libc::fcntl(fd, libc::F_ADD_SEALS, seals) } < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((file, table.len() as u32))
+}
+
+fn send_feedback(feedback: &zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1) {
+    let Ok((table, size)) = format_table() else { return };
+    let device = render_device().unwrap_or(0).to_ne_bytes().to_vec();
+    feedback.format_table(table.as_fd(), size);
+    feedback.main_device(device.clone());
+    feedback.tranche_target_device(device);
+    feedback.tranche_flags(zwp_linux_dmabuf_feedback_v1::TrancheFlags::empty());
+    let indices = (0..DMABUF_FORMATS.len() as u16).flat_map(u16::to_ne_bytes).collect();
+    feedback.tranche_formats(indices);
+    feedback.tranche_done();
+    feedback.done();
 }
 
 impl Dispatch<zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1, DmabufParams> for State {

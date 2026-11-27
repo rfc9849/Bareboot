@@ -1,12 +1,16 @@
 use std::{
     collections::VecDeque,
     io::{self, Write},
-    os::{fd::AsRawFd, unix::net::UnixStream},
+    os::{
+        fd::{AsRawFd, OwnedFd},
+        unix::net::UnixStream,
+    },
     sync::{Arc, Condvar, Mutex},
 };
 
 pub const VERSION: u32 = 1;
 const CAP_HEVC: u32 = 1;
+const CAP_LAYERS: u32 = 2;
 const MAX_INPUT: usize = 64;
 const MAX_BACKLOG: usize = 8 << 20;
 
@@ -16,6 +20,11 @@ pub const TITLE: u32 = 0x12;
 pub const SIZE: u32 = 0x13;
 pub const MOVE: u32 = 0x14;
 pub const RESIZE: u32 = 0x15;
+pub const CURSOR: u32 = 0x16;
+const CURSOR_IMAGE: u32 = 0x17;
+const LAYER: u32 = 0x22;
+const LAYER_MOVE: u32 = 0x23;
+const LAYER_REMOVE: u32 = 0x24;
 pub const VIDEO: u32 = 0x20;
 pub const PIXELS: u32 = 0x21;
 
@@ -30,11 +39,12 @@ pub enum Event {
     Key { key: u32, pressed: bool },
     Leave,
     Keyframe { id: u32 },
+    Release { id: u32 },
 }
 
 #[derive(Default)]
 struct Queue {
-    items: VecDeque<Vec<u8>>,
+    items: VecDeque<(Vec<u8>, Vec<OwnedFd>)>,
     bytes: usize,
     closed: bool,
 }
@@ -54,6 +64,8 @@ pub struct Remote {
     pub scale: Option<i32>,
     pub windows: Vec<Window>,
     pub pointer: Option<wayland_server::protocol::wl_surface::WlSurface>,
+    cursor: Option<bool>,
+    layers: bool,
 }
 
 impl Remote {
@@ -73,10 +85,17 @@ impl Remote {
                             q = ready.wait(q).unwrap();
                         }
                         let Some(item) = q.items.pop_front() else { break };
-                        q.bytes -= item.len();
+                        q.bytes -= item.0.len();
                         item
                     };
-                    if writer.write_all(&item).is_err() {
+                    let (bytes, fds) = item;
+                    let sent = if fds.is_empty() {
+                        writer.write_all(&bytes)
+                    } else {
+                        let raw: Vec<_> = fds.iter().map(AsRawFd::as_raw_fd).collect();
+                        protocol::ahb_wire::send(writer.as_raw_fd(), &bytes, &raw)
+                    };
+                    if sent.is_err() {
                         break;
                     }
                 }
@@ -93,7 +112,13 @@ impl Remote {
             scale: None,
             windows: Vec::new(),
             pointer: None,
+            cursor: None,
+            layers: false,
         })
+    }
+
+    pub fn layers(&self) -> bool {
+        self.layers
     }
 
     pub fn fd(&self) -> i32 {
@@ -105,6 +130,10 @@ impl Remote {
     }
 
     pub fn send(&self, kind: u32, parts: &[&[u8]]) {
+        self.send_fds(kind, parts, Vec::new());
+    }
+
+    pub fn send_fds(&self, kind: u32, parts: &[&[u8]], fds: Vec<OwnedFd>) {
         let len: usize = parts.iter().map(|p| p.len()).sum();
         let mut msg = Vec::with_capacity(8 + len);
         msg.extend_from_slice(&kind.to_le_bytes());
@@ -118,7 +147,7 @@ impl Remote {
             return;
         }
         q.bytes += msg.len();
-        q.items.push_back(msg);
+        q.items.push_back((msg, fds));
         ready.notify_one();
     }
 
@@ -244,6 +273,7 @@ impl Remote {
                 8 => word(0).zip(word(1)).map(|(key, p)| Event::Key { key, pressed: p != 0 }),
                 9 => Some(Event::Leave),
                 10 => word(0).map(|id| Event::Keyframe { id }),
+                11 => word(0).map(|id| Event::Release { id }),
                 _ => None,
             };
             if let Some(event) = event {
@@ -394,6 +424,24 @@ impl Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1, ()> for Sta
             _ => state.decorations.retain(|d| d != resource && d.is_alive()),
         }
     }
+}
+
+fn layer_words(id: u32, layout: &direct::Layout, source: [u32; 4]) -> [u32; 13] {
+    [
+        id,
+        layout.layer_id,
+        layout.dst_x as u32,
+        layout.dst_y as u32,
+        layout.dst_w as u32,
+        layout.dst_h as u32,
+        layout.desktop_w as u32,
+        layout.desktop_h as u32,
+        layout.z_order as u32,
+        source[0],
+        source[1],
+        source[2],
+        source[3],
+    ]
 }
 
 fn logical_size(surface: &wl_surface::WlSurface) -> Option<(i32, i32)> {
@@ -588,6 +636,28 @@ impl State {
         }
     }
 
+    pub(super) fn remote_cursor(&mut self, visible: bool) {
+        let Some(remote) = &mut self.remote else { return };
+        if remote.cursor != Some(visible) {
+            remote.cursor = Some(visible);
+            remote.send(CURSOR, &[&u32::from(visible).to_le_bytes()]);
+        }
+    }
+
+    pub(super) fn remote_cursor_image(&mut self) {
+        let Some(remote) = self.remote.as_ref().filter(|r| r.layers) else { return };
+        let Some((surface, hx, hy)) = self.cursor.as_ref().filter(|(s, _, _)| s.is_alive()) else { return };
+        let data = info(surface).lock().unwrap();
+        let Some(image) = data.image.as_ref().filter(|i| i.width <= 256 && i.height <= 256) else { return };
+        let scale = data.buffer_scale.max(1);
+        let mut head = [0u8; 20];
+        for (i, v) in [image.width, image.height, *hx * scale, *hy * scale, scale].into_iter().enumerate() {
+            head[i * 4..i * 4 + 4].copy_from_slice(&(v as u32).to_le_bytes());
+        }
+        let packed = lz4_flex::block::compress_prepend_size(&image.pixels);
+        remote.send(CURSOR_IMAGE, &[&head, &packed]);
+    }
+
     pub(super) fn remote_detach(&mut self) {
         if self.remote.is_none() {
             return;
@@ -595,6 +665,9 @@ impl State {
         self.keyboard_focus(None);
         self.pointer_leave();
         self.remote = None;
+        if let Some(direct) = &mut self.direct {
+            direct.release_viewer();
+        }
         if let Some(boost) = &mut self.cpu_boost {
             boost.set_attached(false);
         }
@@ -639,6 +712,9 @@ impl State {
             states.extend_from_slice(&(xdg_toplevel::State::Activated as u32).to_ne_bytes());
         }
         let mut data = info(root).lock().unwrap();
+        if data.fullscreen {
+            states.extend_from_slice(&(xdg_toplevel::State::Fullscreen as u32).to_ne_bytes());
+        }
         if let Some(top) = data.top.clone().filter(|_| data.role.is_some()) {
             top.configure(size.0, size.1, states);
             data.configure_xdg(serial);
@@ -752,6 +828,26 @@ impl State {
     ) {
         self.ensure_open(surface);
         let layout = self.remote_layout(surface);
+        if let (Some(remote), Some(direct), Some((id, layout, source))) = (&self.remote, &mut self.direct, layout)
+            && remote.layers
+        {
+            match direct.hold(buffer, fence) {
+                Ok(hold) => {
+                    let has_fence = u32::from(hold.fence.is_some());
+                    let mut fds = hold.fds;
+                    let count = fds.len() as u32 + has_fence;
+                    fds.extend(hold.fence);
+                    let words = layer_words(id, &layout, source)
+                        .into_iter()
+                        .chain([hold.id, has_fence, count, hold.metadata.len() as u32])
+                        .flat_map(u32::to_le_bytes)
+                        .collect::<Vec<u8>>();
+                    remote.send_fds(LAYER, &[&words, &hold.metadata], fds);
+                }
+                Err(_) => surface.post_error(0u32, "hardware buffer is already in use"),
+            }
+            return;
+        }
         let Some(direct) = &mut self.direct else { return };
         let result = match layout {
             Some((id, layout, source)) => direct.present(buffer, fence, layout, direct::Target::Stream(id, source)),
@@ -775,17 +871,20 @@ impl State {
     }
 
     pub(super) fn remote_relayout(&mut self, surface: &wl_surface::WlSurface) {
-        if let Some((id, layout, source)) = self.remote_layout(surface)
-            && let Some(direct) = &self.direct
-        {
+        let Some((id, layout, source)) = self.remote_layout(surface) else { return };
+        if let Some(remote) = self.remote.as_ref().filter(|r| r.layers) {
+            let words: Vec<u8> = layer_words(id, &layout, source).into_iter().flat_map(u32::to_le_bytes).collect();
+            remote.send(LAYER_MOVE, &[&words]);
+        } else if let Some(direct) = &self.direct {
             direct.relayout_stream(id, layout, source);
         }
     }
 
     pub(super) fn remote_remove_layer(&mut self, surface: &wl_surface::WlSurface, layer: u32) {
-        if let Some((_, _, id)) = self.window_of(surface)
-            && let Some(direct) = &self.direct
-        {
+        let Some((_, _, id)) = self.window_of(surface) else { return };
+        if let Some(remote) = self.remote.as_ref().filter(|r| r.layers) {
+            remote.send(LAYER_REMOVE, &[&id.to_le_bytes(), &layer.to_le_bytes()]);
+        } else if let Some(direct) = &self.direct {
             direct.remove_stream_layer(id, layer);
         }
     }
@@ -843,6 +942,18 @@ impl State {
                     && remote.windows.iter().any(|w| w.id == id)
                 {
                     remote.title(id, &info(surface).lock().unwrap().title);
+                }
+            }
+            xdg_toplevel::Request::SetFullscreen { .. } | xdg_toplevel::Request::UnsetFullscreen => {
+                let fullscreen = matches!(request, xdg_toplevel::Request::SetFullscreen { .. });
+                let acknowledged = {
+                    let mut data = info(surface).lock().unwrap();
+                    data.fullscreen = fullscreen;
+                    data.acknowledged
+                };
+                if acknowledged {
+                    let size = if fullscreen { self.fullscreen_size() } else { (0, 0) };
+                    self.configure_window(surface, size);
                 }
             }
             xdg_toplevel::Request::Move { .. } => {
@@ -1083,6 +1194,9 @@ impl State {
                     if let Some(direct) = &self.direct {
                         direct.set_hevc(caps & CAP_HEVC != 0);
                     }
+                    if let Some(remote) = &mut self.remote {
+                        remote.layers = caps & CAP_LAYERS != 0;
+                    }
                     self.remote_hello(scale, width, height);
                 }
                 Event::Configure { id, width, height } => {
@@ -1111,6 +1225,11 @@ impl State {
                 Event::Keyframe { id } => {
                     if let Some(direct) = &self.direct {
                         direct.keyframe(id);
+                    }
+                }
+                Event::Release { id } => {
+                    if let Some(direct) = &mut self.direct {
+                        direct.release_flight(id);
                     }
                 }
             }

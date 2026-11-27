@@ -9,7 +9,7 @@ pub use codec::{
 };
 pub use fdpass::{recv_frame, send_frame};
 
-pub const PROTOCOL_VERSION: u32 = 18;
+pub const PROTOCOL_VERSION: u32 = 19;
 pub const DEFAULT_SOCKET_PATH: &str = "/dev/socket/bareboot/barebootd.sock";
 pub const DEFAULT_STATE_DIR: &str = "/data/adb/bareboot";
 pub const DEFAULT_SHARED_DIR: &str = "/data/media/0/Linux";

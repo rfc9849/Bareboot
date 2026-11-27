@@ -38,6 +38,12 @@ fi
 BIN="$ROOT/rust/target/aarch64-unknown-linux-musl/release/bareboot"
 cp "$BIN" "$DIST/bareboot-aarch64-musl"
 
+echo "==> Building the screen host helper"
+: "${ANDROID_NDK_HOME:?Install the Android NDK and set ANDROID_NDK_HOME to its directory to build the screen host helper.}"
+NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$(uname -s | tr '[:upper:]' '[:lower:]')-x86_64/bin"
+"$NDK_BIN/aarch64-linux-android30-clang" -shared -fPIC -O2 -Wall -Wextra -Werror -Wl,-z,max-page-size=16384 \
+    "$ROOT/tools/screen/screen_jni.c" -landroid -lnativewindow -o "$DIST/libbareboot_screen.so"
+
 if [[ "$GPU" == prebuilt ]]; then
     echo "==> Using prebuilt GPU bundle in $DIST/gpu"
     [[ -d "$DIST/gpu/host" && -d "$DIST/gpu/guest" ]] || { echo "Missing prebuilt GPU bundle under $DIST/gpu" >&2; exit 1; }
@@ -68,6 +74,10 @@ cp -R "$ROOT/ksu-module/"* "$STAGE/"
 mkdir -p "$STAGE/bin"
 cp "$BIN" "$STAGE/bin/bareboot"
 install -m 0755 "$ROOT/rust/target/aarch64-unknown-linux-musl/release/bareboot-display" "$STAGE/bin/bareboot-display"
+SCREEN_APK="$APK_DIR/app-release.apk"
+[[ -f "$SCREEN_APK" ]] || SCREEN_APK="$APK_DIR/app-release-unsigned.apk"
+install -m 0644 "$SCREEN_APK" "$STAGE/bin/bareboot-screen.apk"
+install -m 0644 "$DIST/libbareboot_screen.so" "$STAGE/bin/libbareboot_screen.so"
 
 SLIRP="$DIST/.slirp4netns-1.3.7"
 mkdir -p "$SLIRP"

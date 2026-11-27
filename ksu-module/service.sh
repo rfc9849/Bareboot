@@ -31,6 +31,10 @@ if [ -f "$MODDIR/bin/bareboot-display" ] &&
    ! /system/bin/chcon u:object_r:bareboot_display_exec:s0 "$MODDIR/bin/bareboot-display"; then
     printf '%s\n' 'Could not label the Bareboot display server.' >>"$LOG"
 fi
+if [ -f "$MODDIR/bin/bareboot-screen.apk" ] &&
+   ! /system/bin/chcon u:object_r:bareboot_screen_file:s0 "$MODDIR/bin/bareboot-screen.apk" "$MODDIR/bin/libbareboot_screen.so"; then
+    printf '%s\n' 'Could not label the Bareboot screen host.' >>"$LOG"
+fi
 if [ -f "$MODDIR/gpu/host/kumquat" ]; then
     if ! /system/bin/chcon u:object_r:bareboot_gpu_exec:s0 "$MODDIR/gpu/host/kumquat"          "$MODDIR/gpu/host/libgfxstream_backend.so"          "$MODDIR/gpu/host/bareboot-media" ||
        ! /system/bin/chcon -R u:object_r:bareboot_gpu_guest:s0 "$MODDIR/gpu/guest"; then

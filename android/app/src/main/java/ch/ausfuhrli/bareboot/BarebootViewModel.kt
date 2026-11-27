@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ch.ausfuhrli.bareboot.files.SharedFolderAccess
+import ch.ausfuhrli.bareboot.screen.DesktopSession
 import ch.ausfuhrli.bareboot.ipc.DaemonStatus
 import ch.ausfuhrli.bareboot.ipc.DaemonUnavailableException
 import ch.ausfuhrli.bareboot.ipc.Distro
@@ -321,6 +322,20 @@ class BarebootViewModel(app: Application) : AndroidViewModel(app) {
             newTab(name, root = false)
         }
         screen = Screen.Terminal
+    }
+
+    fun openScreen(name: String, displayId: Int?) = launchAction {
+        if (displayId == null) {
+            messages.trySend(str(R.string.msg_connect_monitor))
+            return@launchAction
+        }
+        if (!isRunning(name)) startImage(name)
+        io {
+            client.startScreen(name, displayId)
+            client.createTab(name, 0, DesktopSession.prepareArgv)
+            client.createTab(name, 1000, DesktopSession.argv)
+        }
+        messages.trySend(str(R.string.msg_screen_started, name))
     }
 
     fun openNewTab(root: Boolean, name: String? = null) = launchAction {

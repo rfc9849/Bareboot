@@ -327,7 +327,7 @@ def main():
     require(args.rootfs.is_file() and args.rootfs.name.endswith((".tar.xz", ".tar.gz")), "Pass a trusted Debian ARM64 rootfs archive")
     require(Path("dist/bareboot-aarch64-musl").is_file(), "Run ./build.sh from the repository root")
     require(adb("get-state") == "device" and android("getenforce") == "Enforcing", "Use a USB test device with SELinux Enforcing")
-    require("proto=18" in lin("ping"), "Install the current daemon before running the smoke test")
+    require("proto=19" in lin("ping"), "Install the current daemon before running the smoke test")
     runs = ssh_config(args.ssh_config)
     android("mkdir", STAGE)
     try:
